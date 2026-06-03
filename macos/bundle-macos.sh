@@ -71,13 +71,16 @@ PIXBUF_VER=2.10.0
 PIXBUF_DST="$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders"
 mkdir -p "$PIXBUF_DST"
 cp "$BREW"/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders/*.so "$PIXBUF_DST/" 2>/dev/null || true
-for so in "$PIXBUF_DST"/*.so; do
-  bundle_into "$so" "$FW" || true
-done
+# Generate the cache BEFORE rewriting deps: query-loaders dlopens each loader, and
+# once dylibbundler points its librsvg at @executable_path the loader won't load at
+# build time, so the svg loader would silently drop out of the cache (broken icons).
 GDK_PIXBUF_MODULEDIR="$PIXBUF_DST" \
   "$BREW/bin/gdk-pixbuf-query-loaders" > "$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders.cache"
 # rewrite the absolute loader paths to a bundle-relative marker the launcher fixes up
 sed -i '' "s|$RES|@RES@|g" "$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders.cache" || true
+for so in "$PIXBUF_DST"/*.so; do
+  bundle_into "$so" "$FW" || true
+done
 
 info "Bundling GIO modules..."
 GIO_DST="$RES/lib/gio/modules"; mkdir -p "$GIO_DST"
@@ -156,6 +159,8 @@ if grep -q '@RES@' "$GDK_PIXBUF_MODULE_FILE" 2>/dev/null; then
   export GDK_PIXBUF_MODULE_FILE="$GDK_PIXBUF_MODULE_FILE.real"
 fi
 export XDG_DATA_DIRS="$RES:$RES/share"
+# so the GUI can re-spawn itself as the background daemon (no /proc on macOS)
+export ANOTHER_TGPROXY_EXE="$DIR/another-tgproxy"
 exec "$DIR/another-tgproxy" "$@"
 LAUNCH
 chmod +x "$MACOS/launcher"

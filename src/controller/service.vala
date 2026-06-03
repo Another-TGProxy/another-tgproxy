@@ -182,6 +182,11 @@ namespace TgWsProxy {
         }
 
         static string daemon_exec () {
+            // The macOS .app launcher exports the real binary path (there is no
+            // /proc/self/exe and the binary is not on PATH).
+            var mac = Environment.get_variable ("ANOTHER_TGPROXY_EXE");
+            if (mac != null && mac != "")
+                return mac;
             // In an AppImage, $APPIMAGE is the outer image (re-runnable); /proc/self/exe
             // may point at the bundled loader inside the mount, which is not.
             var appimage = Environment.get_variable ("APPIMAGE");
