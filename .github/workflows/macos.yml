@@ -54,14 +54,10 @@ jobs:
           CORE_SRC: _core
         run: bash macos/bundle-macos.sh
 
-      - name: Get version
-        id: ver
-        run: echo "version=$(awk -F\\' '/version:/{print $2; exit}' meson.build)" >> "$GITHUB_OUTPUT"
-
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: another-tgproxy-${{ steps.ver.outputs.version }}-macos-${{ matrix.arch }}
+          name: another-tgproxy-macos-${{ matrix.arch }}
           path: dist/*.dmg
           retention-days: 14
 
