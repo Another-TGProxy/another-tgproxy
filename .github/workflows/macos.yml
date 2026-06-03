@@ -1,0 +1,72 @@
+name: macOS
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15   # Apple Silicon (arm64)
+            arch: arm64
+          - runner: macos-13   # Intel (x86_64)
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout GUI
+        uses: actions/checkout@v4
+
+      - name: Checkout core (mtproxy-ws)
+        uses: actions/checkout@v4
+        with:
+          repository: Another-TGProxy/mtproxy-ws
+          path: _core
+
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-macos-${{ matrix.arch }}-${{ hashFiles('.github/workflows/macos.yml') }}
+
+      - name: Install dependencies
+        run: |
+          brew update --quiet || true
+          brew install \
+            meson ninja pkg-config \
+            vala blueprint-compiler \
+            gtk4 libadwaita json-glib \
+            openssl@3 gettext \
+            adwaita-icon-theme librsvg \
+            dylibbundler create-dmg desktop-file-utils
+
+      - name: Build app + bundle .app/.dmg
+        env:
+          CORE_SRC: _core
+        run: bash macos/bundle-macos.sh
+
+      - name: Get version
+        id: ver
+        run: echo "version=$(awk -F\\' '/version:/{print $2; exit}' meson.build)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: another-tgproxy-${{ steps.ver.outputs.version }}-macos-${{ matrix.arch }}
+          path: dist/*.dmg
+          retention-days: 14
+
+      - name: Release on tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg

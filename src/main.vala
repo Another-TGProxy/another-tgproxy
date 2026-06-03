@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 int main (string[] args) {
+    // The C engine writes to peer sockets that may already be closed; on macOS
+    // (no MSG_NOSIGNAL) that would raise SIGPIPE and kill the process.
+    Posix.signal (Posix.SIGPIPE, Posix.SIG_IGN);
     Intl.setlocale (LocaleCategory.ALL, "");
     // Inside an AppImage the install prefix is the (relocatable) mount point, so
     // the baked-in LOCALEDIR doesn't exist; $APPDIR points at the bundle root.
