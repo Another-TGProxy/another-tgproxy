@@ -13,12 +13,22 @@
       controlled by a GTK4/libadwaita front-end.
     </p>
   </description>
+  <developer id="space.ampernic">
+    <name>Ampernic</name>
+  </developer>
   <launchable type="desktop-id">@APP_ID@.desktop</launchable>
   <categories>
     <category>Network</category>
   </categories>
+  <keywords>
+    <keyword>Telegram</keyword>
+    <keyword>proxy</keyword>
+    <keyword>MTProto</keyword>
+    <keyword>WebSocket</keyword>
+  </keywords>
   <url type="homepage">https://github.com/Another-TGProxy</url>
   <url type="bugtracker">https://github.com/Another-TGProxy/another-tgproxy/issues</url>
+  <url type="vcs-browser">https://github.com/Another-TGProxy/another-tgproxy</url>
   <releases>
     <release version="2.0.0" date="2026-06-02"/>
   </releases>
