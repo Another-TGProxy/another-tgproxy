@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 int main (string[] args) {
     Intl.setlocale (LocaleCategory.ALL, "");
-    Intl.bindtextdomain (Build.GETTEXT_PACKAGE, Build.LOCALEDIR);
+    // Inside an AppImage the install prefix is the (relocatable) mount point, so
+    // the baked-in LOCALEDIR doesn't exist; $APPDIR points at the bundle root.
+    string localedir = Build.LOCALEDIR;
+    var appdir = Environment.get_variable ("APPDIR");
+    if (appdir != null && appdir != "")
+        localedir = appdir + "/usr/share/locale";
+    Intl.bindtextdomain (Build.GETTEXT_PACKAGE, localedir);
     Intl.bind_textdomain_codeset (Build.GETTEXT_PACKAGE, "UTF-8");
     Intl.textdomain (Build.GETTEXT_PACKAGE);
 

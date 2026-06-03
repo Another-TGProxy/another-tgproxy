@@ -64,7 +64,10 @@ namespace TgWsProxy {
                 var sock = new Socket (ip.get_family (), SocketType.STREAM, SocketProtocol.TCP);
                 bool busy = false;
                 try {
-                    sock.bind (addr, false); // no SO_REUSEADDR: an active listener -> EADDRINUSE
+                    // Use SO_REUSEADDR like the daemon does, so just-closed
+                    // connections lingering in TIME_WAIT don't look "in use"
+                    // (an actually-listening daemon still yields EADDRINUSE).
+                    sock.bind (addr, true);
                 } catch (Error e) {
                     busy = true;
                 }
@@ -107,13 +110,20 @@ namespace TgWsProxy {
         public void stop () {
             try {
                 var conn = Bus.get_sync (BusType.SESSION);
+                // Build the (sava{sv}) tuple from ready-made children: a format
+                // string like "(sava{sv})" makes g_variant_new expect builders for
+                // the av / a{sv}, and passing values there aborts the process.
+                var args = new Variant.tuple ({
+                    new Variant.string ("quit"),
+                    new Variant.array (VariantType.VARIANT, {}),
+                    new Variant.array (new VariantType ("{sv}"), {})
+                });
                 conn.call_sync (
                     Build.DAEMON_ID,
                     object_path (),
                     "org.freedesktop.Application",
                     "ActivateAction",
-                    new Variant ("(sava{sv})", "quit", new Variant.array (VariantType.VARIANT, {}),
-                                 new Variant.array (new VariantType ("{sv}"), {})),
+                    args,
                     null, DBusCallFlags.NONE, -1, null);
             } catch (Error e) {
                 // fall back to nothing; the GUI also sends IPC "stop"
@@ -146,14 +156,18 @@ namespace TgWsProxy {
                 DirUtils.create_with_parents (
                     Path.build_filename (Environment.get_user_config_dir (), "autostart"), 0755);
                 var exe = daemon_exec ();
+                // An AppImage has no installed D-Bus service to activate, so the
+                // autostart entry must just exec it (DBusActivatable would make the
+                // session try — and fail — to activate the bus name).
+                bool is_appimage = Environment.get_variable ("APPIMAGE") != null;
                 var contents =
                     "[Desktop Entry]\n" +
                     "Type=Application\n" +
                     "Name=%s\n".printf (Build.APP_NAME) +
-                    "Exec=%s --daemon\n".printf (exe) +
+                    "Exec=\"%s\" --daemon\n".printf (exe) +
                     "Icon=%s\n".printf (Build.APP_ID_RELEVANT) +
                     "Terminal=false\n" +
-                    "DBusActivatable=true\n" +
+                    "DBusActivatable=%s\n".printf (is_appimage ? "false" : "true") +
                     "NoDisplay=true\n" +
                     "X-GNOME-Autostart-Delay=10\n";
                 try { FileUtils.set_contents (path, contents); }
