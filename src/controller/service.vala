@@ -37,7 +37,12 @@ namespace TgWsProxy {
                 failed (_("Port %d is already in use — the proxy may already be running, possibly in another environment (e.g. Flatpak).").printf (cfg.port));
                 return;
             }
-            if (dbus_activate ()) {
+            // Running as an AppImage we have no D-Bus service of our own; the one
+            // installed on the system may belong to a different delivery (e.g. a
+            // Flatpak), and activating it would launch THAT daemon instead. So spawn
+            // our own binary directly ($APPIMAGE re-runs the image in --daemon mode).
+            bool is_appimage = Environment.get_variable ("APPIMAGE") != null;
+            if (!is_appimage && dbus_activate ()) {
                 verify_started.begin ();
                 return;
             }
@@ -163,6 +168,11 @@ namespace TgWsProxy {
         }
 
         static string daemon_exec () {
+            // In an AppImage, $APPIMAGE is the outer image (re-runnable); /proc/self/exe
+            // may point at the bundled loader inside the mount, which is not.
+            var appimage = Environment.get_variable ("APPIMAGE");
+            if (appimage != null && appimage != "")
+                return appimage;
             try {
                 return FileUtils.read_link ("/proc/self/exe");
             } catch (Error e) {
