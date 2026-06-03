@@ -158,6 +158,10 @@ namespace TgWsProxy {
         }
 
         void open_gui () {
+#if DARWIN
+            // No .desktop on macOS; the window is raised through the app itself.
+            // TODO(macos): wire to the single-process window (stage 3).
+#else
             var info = new DesktopAppInfo (Build.APP_ID_RELEVANT + ".desktop");
             if (info == null) return;
             try {
@@ -165,6 +169,7 @@ namespace TgWsProxy {
             } catch (Error e) {
                 warning ("open gui failed: %s", e.message);
             }
+#endif
         }
 
         void open_telegram () {

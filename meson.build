@@ -59,6 +59,11 @@ deps = [
 # The core ships its Vala binding (mtproxy-ws.vapi) in its own datadir; add it
 # to valac's search path so this builds against a non-system install too.
 vala_extra = ['--pkg', 'mtproxy-ws', '--pkg', 'posix']
+if host_machine.system() == 'darwin'
+  # GDesktopAppInfo / SNI / session D-Bus are Linux-only; macOS code paths are
+  # guarded with #if DARWIN in the Vala sources.
+  vala_extra += ['--define=DARWIN']
+endif
 mtproxy_vapidir = mtproxy_dep.get_variable(pkgconfig: 'vapidir', default_value: '')
 if mtproxy_vapidir != ''
   vala_extra += ['--vapidir', mtproxy_vapidir]
