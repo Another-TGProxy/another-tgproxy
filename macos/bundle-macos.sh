@@ -177,12 +177,12 @@ export XDG_DATA_DIRS="$RES/share:$RES"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 export GSETTINGS_SCHEMA_DIR="$RES/glib-2.0/schemas"
 export GIO_MODULE_DIR="$RES/lib/gio/modules"
-export GDK_PIXBUF_MODULE_FILE="$RES/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
-# materialise bundle-relative loader paths
-if grep -q '@RES@' "$GDK_PIXBUF_MODULE_FILE" 2>/dev/null; then
-  sed "s|@RES@|$RES|g" "$GDK_PIXBUF_MODULE_FILE" > "$GDK_PIXBUF_MODULE_FILE.real"
-  export GDK_PIXBUF_MODULE_FILE="$GDK_PIXBUF_MODULE_FILE.real"
-fi
+# Materialise the loader cache (turn @RES@ into the real path) into a WRITABLE dir:
+# the .app may live on a read-only DMG or in /Applications, so we can't write inside it.
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/Library/Caches}/space.ampernic.AnotherTGProxy"
+mkdir -p "$CACHE_DIR"
+sed "s|@RES@|$RES|g" "$RES/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache" > "$CACHE_DIR/loaders.cache"
+export GDK_PIXBUF_MODULE_FILE="$CACHE_DIR/loaders.cache"
 export XDG_DATA_DIRS="$RES:$RES/share"
 # so the GUI can re-spawn itself as the background daemon (no /proc on macOS)
 export ANOTHER_TGPROXY_EXE="$DIR/another-tgproxy"
