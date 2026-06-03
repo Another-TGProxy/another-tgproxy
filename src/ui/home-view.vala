@@ -34,6 +34,10 @@ namespace TgWsProxy {
 
             client.status_changed.connect (on_status);
             client.connection_changed.connect (on_connection);
+
+            // Until the daemon reports in, assume it is not running.
+            stop_btn.sensitive = false;
+            restart_btn.sensitive = false;
         }
 
         private void open_in_telegram () {
@@ -55,6 +59,7 @@ namespace TgWsProxy {
                 home_status.description = error_summary (s.error);
                 start_btn.sensitive = true;
                 stop_btn.sensitive = true;
+                restart_btn.sensitive = false;
                 return;
             }
             bool r = s.running;
@@ -72,6 +77,7 @@ namespace TgWsProxy {
             }
             start_btn.sensitive = !r;
             stop_btn.sensitive = r;
+            restart_btn.sensitive = r;   // only restart a running proxy
         }
 
         private void on_connection (bool connected) {
@@ -81,6 +87,7 @@ namespace TgWsProxy {
                 home_status.description = _("Daemon is not running");
                 start_btn.sensitive = true;
                 stop_btn.sensitive = false;
+                restart_btn.sensitive = false;
             }
         }
     }
