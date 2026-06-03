@@ -40,7 +40,7 @@ namespace TgWsProxy {
     }
 
     // Headless relay using the C engine. Usage:
-    //   tg-ws-proxy --proxy [SECRET_HEX] [HOST] [PORT]
+    //   another-tgproxy --proxy [SECRET_HEX] [HOST] [PORT]
     public int run_proxy (string[] args) {
         string secret_hex = (args.length > 2) ? args[2]
                                               : "3313d0b0af25df7e15eb02d1b856434b";

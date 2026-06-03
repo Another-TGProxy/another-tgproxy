@@ -190,7 +190,7 @@ namespace TgWsProxy {
             try {
                 return FileUtils.read_link ("/proc/self/exe");
             } catch (Error e) {
-                return "tg-ws-proxy";
+                return "another-tgproxy";
             }
         }
     }

@@ -55,14 +55,14 @@ jobs:
           # lib4bin pulls the binary + every shared lib it needs — including glibc and
           # the dynamic loader — into AppDir/shared, so the AppImage runs on older glibc.
           ./sharun lib4bin --hard-links --with-hooks --strip --gen-lib-path --dst-dir AppDir \
-            AppDir/usr/bin/tg-ws-proxy \
+            AppDir/usr/bin/another-tgproxy \
             /usr/lib/$ARCH-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders/*.so \
             /usr/lib/$ARCH-linux-gnu/gio/modules/*.so
           # Bundle the Adwaita icon theme so the UI's symbolic icons resolve.
           cp -r /usr/share/icons/Adwaita AppDir/usr/share/icons/ 2>/dev/null || true
           # AppImage AppDir entrypoint: AppRun -> sharun; .app names the bin to launch.
           ln -f AppDir/sharun AppDir/AppRun
-          echo 'tg-ws-proxy' > AppDir/.app
+          echo 'another-tgproxy' > AppDir/.app
           cp AppDir/usr/share/applications/space.ampernic.AnotherTGProxy.desktop AppDir/
           cp AppDir/usr/share/icons/hicolor/scalable/apps/space.ampernic.AnotherTGProxy.svg AppDir/
           cp AppDir/space.ampernic.AnotherTGProxy.svg AppDir/.DirIcon

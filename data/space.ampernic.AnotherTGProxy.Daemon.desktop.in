@@ -2,7 +2,7 @@
 Type=Application
 Name=Another TGProxy (фоновая служба)
 Comment=MTProto↔WebSocket прокси для Telegram
-Exec=@bindir@/tg-ws-proxy --daemon
+Exec=@bindir@/another-tgproxy --daemon
 Icon=space.ampernic.AnotherTGProxy
 Terminal=false
 DBusActivatable=true

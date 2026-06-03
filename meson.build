@@ -1,7 +1,7 @@
-# tg-ws-proxy GUI — GTK4/libadwaita front-end + background daemon for the
+# another-tgproxy GUI — GTK4/libadwaita front-end + background daemon for the
 # mtproxy-ws engine. Build-depends on the installed `mtproxy-ws` package
 # (pkg-config + the bundled vala binding); build/install core first.
-project('tg-ws-proxy', ['c', 'vala'],
+project('another-tgproxy', ['c', 'vala'],
   version: '2.0.0',
   meson_version: '>= 0.62',
   default_options: ['warning_level=2'],
@@ -73,7 +73,7 @@ foreach view : ['window', 'home-view', 'settings-view', 'log-view']
     command: [blueprint_compiler, 'compile', '--output', '@OUTPUT@', '@INPUT@'],
   )
 endforeach
-resources = gnome.compile_resources('tg-ws-proxy-resources',
+resources = gnome.compile_resources('another-tgproxy-resources',
   'data/gresource.xml',
   source_dir: [meson.current_build_dir(), meson.current_source_dir() / 'data'],
   dependencies: ui_targets,
@@ -98,7 +98,7 @@ sources = files(
   'src/controller/service.vala',
 )
 
-executable('tg-ws-proxy',
+executable('another-tgproxy',
   sources, config_h, resources,
   dependencies: deps,
   vala_args: vala_extra,

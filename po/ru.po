@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: tg-ws-proxy\n"
+"Project-Id-Version: another-tgproxy\n"
 "Report-Msgid-Bugs-To: \n"
 "Language-Team: Russian\n"
 "Language: ru\n"

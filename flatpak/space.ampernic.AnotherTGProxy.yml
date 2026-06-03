@@ -7,7 +7,7 @@ app-id: space.ampernic.AnotherTGProxy
 runtime: org.gnome.Platform
 runtime-version: '49'
 sdk: org.gnome.Sdk
-command: tg-ws-proxy
+command: another-tgproxy
 
 finish-args:
   - --share=network
@@ -27,12 +27,14 @@ modules:
     buildsystem: meson
     config-opts:
       - --buildtype=release
+      - --libdir=lib   # keep the .pc + lib in /app/lib/pkgconfig (pkg-config's search path);
+                       # some flatpak-builder versions default libdir to lib64, which hides it
     sources:
       - type: git
         url: https://github.com/Another-TGProxy/mtproxy-ws.git
         commit: __CORE_COMMIT__
 
-  - name: tg-ws-proxy
+  - name: another-tgproxy
     buildsystem: meson
     config-opts:
       - --buildtype=release
