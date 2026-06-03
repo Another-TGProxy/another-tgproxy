@@ -127,8 +127,10 @@ mkdir -p "$RES/icons/hicolor/scalable/apps"
 cp "$INSTALL/share/icons/hicolor/scalable/apps/$APP_ID.svg" \
    "$RES/icons/hicolor/scalable/apps/"
 chmod -R u+w "$RES/icons"
-"$BREW/bin/gtk4-update-icon-cache" -q -t -f "$RES/icons/Adwaita"  2>/dev/null || true
-"$BREW/bin/gtk4-update-icon-cache" -q -t -f "$RES/icons/hicolor" 2>/dev/null || true
+# Drop any icon-theme.cache: a -t cache (or Homebrew's, built for its own paths) can
+# shadow real icons so lookups fail. With index.theme present GTK4 scans the dirs
+# directly and reliably finds every icon.
+find "$RES/icons" -name icon-theme.cache -delete 2>/dev/null || true
 echo "    bundled $(find "$RES/icons/Adwaita" -name '*-symbolic.svg' | wc -l | tr -d ' ') Adwaita symbolic icons"
 
 # translations
