@@ -75,13 +75,24 @@ ninja -C build
 
 ## 📦 Flatpak (recommended)
 
-The manifest bundles the core, so nothing has to be installed on the host:
+From the [flatpak.ampernic.space](https://flatpak.ampernic.space) repository:
+
+```sh
+flatpak remote-add --if-not-exists --user \
+    ampernic https://flatpak.ampernic.space/ampernic.flatpakrepo
+flatpak install --user ampernic space.ampernic.AnotherTGProxy          # //devel for a dev build
+flatpak run space.ampernic.AnotherTGProxy
+```
+
+Local build from this checkout (the single manifest bundles the core; the commit
+placeholders are filled with the current `main`):
 
 ```sh
 flatpak install flathub org.gnome.Sdk//49 org.gnome.Platform//49 org.flatpak.Builder
-flatpak run org.flatpak.Builder --user --install --force-clean \
-    build-flatpak gui/space.ampernic.AnotherTGProxy.yml          # from the repo root
-flatpak run space.ampernic.AnotherTGProxy
+sed -e "s/__CORE_COMMIT__/$(git ls-remote https://github.com/Another-TGProxy/mtproxy-ws.git main | cut -f1)/" \
+    -e "s/__GUI_COMMIT__/$(git rev-parse HEAD)/" \
+    gui/flatpak/space.ampernic.AnotherTGProxy.yml > /tmp/manifest.yml
+flatpak run org.flatpak.Builder --user --install --force-clean build-flatpak /tmp/manifest.yml
 ```
 
 Under Flatpak the daemon starts as its **own flatpak instance** (via D-Bus

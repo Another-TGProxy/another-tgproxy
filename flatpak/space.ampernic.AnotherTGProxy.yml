@@ -1,0 +1,42 @@
+# The single Flatpak manifest for this app: it pulls both components (core + GUI)
+# by commit so the build is self-contained and reproducible. CI fills the
+# __*_COMMIT__ placeholders in .github/workflows/publish-flatpak.yml and dispatches
+# it to the Ampernic Flatpak repo. To build locally, substitute the placeholders
+# with concrete commits first (see the README).
+app-id: space.ampernic.AnotherTGProxy
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: tg-ws-proxy
+
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --talk-name=org.gnome.Shell.Extensions
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/vala
+  - '*.a'
+
+modules:
+  - name: mtproxy-ws
+    buildsystem: meson
+    config-opts:
+      - --buildtype=release
+    sources:
+      - type: git
+        url: https://github.com/Another-TGProxy/mtproxy-ws.git
+        commit: __CORE_COMMIT__
+
+  - name: tg-ws-proxy
+    buildsystem: meson
+    config-opts:
+      - --buildtype=release
+    sources:
+      - type: git
+        url: https://github.com/Another-TGProxy/another-tgproxy.git
+        commit: __GUI_COMMIT__

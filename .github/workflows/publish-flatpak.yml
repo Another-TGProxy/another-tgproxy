@@ -1,0 +1,68 @@
+name: Publish Flatpak
+
+# Publishes this app to the Ampernic Flatpak repo (flatpak.ampernic.space).
+# push to main -> devel channel; pushing a tag -> stable channel.
+# The build itself runs in Ampernic/flatpak; here we only resolve the exact
+# commits, render the self-contained manifest, and dispatch it.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve channel + commits, render manifest
+        run: |
+          set -euo pipefail
+          CORE=https://github.com/Another-TGProxy/mtproxy-ws.git
+
+          if [ "${{ github.ref_type }}" = tag ]; then
+            CHANNEL=stable
+            GUI_COMMIT='${{ github.sha }}'
+            # Match core to its newest tag if it has any, else its main.
+            ctag=$(git ls-remote --tags --refs "$CORE" \
+                   | sed 's#.*refs/tags/##' | sort -V | tail -n1)
+            if [ -n "$ctag" ]; then
+              CORE_COMMIT=$(git ls-remote "$CORE" "refs/tags/$ctag" | cut -f1)
+            else
+              echo "::warning::mtproxy-ws has no tags; stable uses its main"
+              CORE_COMMIT=$(git ls-remote "$CORE" refs/heads/main | cut -f1)
+            fi
+          else
+            CHANNEL=devel
+            GUI_COMMIT='${{ github.sha }}'
+            CORE_COMMIT=$(git ls-remote "$CORE" refs/heads/main | cut -f1)
+          fi
+
+          sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
+              -e "s/__GUI_COMMIT__/$GUI_COMMIT/g" \
+              flatpak/space.ampernic.AnotherTGProxy.yml > manifest.yml
+
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+          echo "channel=$CHANNEL  gui=${GUI_COMMIT:0:12}  core=${CORE_COMMIT:0:12}"
+
+      - name: Dispatch to Ampernic/flatpak
+        env:
+          TOKEN: ${{ secrets.FLATPAK_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          payload=$(jq -n \
+            --arg id  'space.ampernic.AnotherTGProxy' \
+            --arg ch  "$CHANNEL" \
+            --arg m   "$(base64 -w0 manifest.yml)" \
+            --arg rt  '49' \
+            '{event_type:"publish",
+              client_payload:{app_id:$id, channel:$ch, manifest_b64:$m, runtime_version:$rt}}')
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/Ampernic/flatpak/dispatches \
+            -d "$payload")
+          echo "dispatch HTTP $code"
+          [ "$code" = 204 ]

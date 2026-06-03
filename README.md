@@ -74,13 +74,24 @@ ninja -C build
 
 ## 📦 Flatpak (рекомендуется)
 
-Манифест включает ядро как модуль — ничего не нужно ставить в систему:
+Из репозитория [flatpak.ampernic.space](https://flatpak.ampernic.space):
+
+```sh
+flatpak remote-add --if-not-exists --user \
+    ampernic https://flatpak.ampernic.space/ampernic.flatpakrepo
+flatpak install --user ampernic space.ampernic.AnotherTGProxy          # //devel для dev-сборки
+flatpak run space.ampernic.AnotherTGProxy
+```
+
+Локальная сборка из этого чекаута (единый манифест включает ядро как модуль;
+плейсхолдеры коммитов заполняются текущим `main`):
 
 ```sh
 flatpak install flathub org.gnome.Sdk//49 org.gnome.Platform//49 org.flatpak.Builder
-flatpak run org.flatpak.Builder --user --install --force-clean \
-    build-flatpak gui/space.ampernic.AnotherTGProxy.yml          # из корня репозитория
-flatpak run space.ampernic.AnotherTGProxy
+sed -e "s/__CORE_COMMIT__/$(git ls-remote https://github.com/Another-TGProxy/mtproxy-ws.git main | cut -f1)/" \
+    -e "s/__GUI_COMMIT__/$(git rev-parse HEAD)/" \
+    gui/flatpak/space.ampernic.AnotherTGProxy.yml > /tmp/manifest.yml
+flatpak run org.flatpak.Builder --user --install --force-clean build-flatpak /tmp/manifest.yml
 ```
 
 Под Flatpak демон поднимается **отдельным flatpak-инстансом** (через D-Bus-активацию)
