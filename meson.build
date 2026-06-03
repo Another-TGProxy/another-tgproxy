@@ -51,7 +51,7 @@ deps = [
   dependency('gio-2.0'),
   dependency('gio-unix-2.0'),
   dependency('gtk4'),
-  dependency('libadwaita-1', version: '>= 1.4'),
+  dependency('libadwaita-1', version: '>= 1.7'),   # Adw.WrapBox, Adw.ToggleGroup
   dependency('json-glib-1.0'),
   mtproxy_dep,
 ]

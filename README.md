@@ -54,7 +54,7 @@
 
 - **`mtproxy-ws`** — ядро (`libmtproxyws` + заголовки + `mtproxy-ws.pc` +
   Vala-биндинг `mtproxy-ws.vapi`). **Соберите и установите его первым.**
-- `gtk4`, `libadwaita-1` (≥ 1.4), `glib-2.0`, `gio-2.0`, `gio-unix-2.0`,
+- `gtk4`, `libadwaita-1` (≥ 1.7), `glib-2.0`, `gio-2.0`, `gio-unix-2.0`,
   `json-glib-1.0`, `vala`, `meson`, `ninja`, `blueprint-compiler`.
 
 ## 🔨 Сборка

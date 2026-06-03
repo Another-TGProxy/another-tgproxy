@@ -55,7 +55,7 @@ picks the best: tray where present → else background → else window.
 
 - **`mtproxy-ws`** — the core (`libmtproxyws` + headers + `mtproxy-ws.pc` + the
   `mtproxy-ws.vapi` Vala binding). **Build & install it first.**
-- `gtk4`, `libadwaita-1` (≥ 1.4), `glib-2.0`, `gio-2.0`, `gio-unix-2.0`,
+- `gtk4`, `libadwaita-1` (≥ 1.7), `glib-2.0`, `gio-2.0`, `gio-unix-2.0`,
   `json-glib-1.0`, `vala`, `meson`, `ninja`, `blueprint-compiler`.
 
 ## 🔨 Build
