@@ -26,6 +26,14 @@ info() { echo "==> $*"; }
 RSVG="$(brew --prefix librsvg)"
 DB="dylibbundler -cd -of -b -s $BREW/lib -s $RSVG/lib"
 bundle_into() { $DB -x "$1" -d "$2" -p "@executable_path/../Frameworks/" </dev/null; }
+# dylibbundler can't rewrite @rpath/* refs inside a dlopen'd plugin; repoint them
+# at the bundle's Frameworks explicitly first.
+fix_rpath_refs() {
+  otool -L "$1" 2>/dev/null | awk '/@rpath\//{print $1}' | while read -r dep; do
+    install_name_tool -change "$dep" \
+      "@executable_path/../Frameworks/${dep##*/}" "$1" 2>/dev/null || true
+  done
+}
 
 # openssl@3 is keg-only - expose it to the compiler/linker (core uses find_library).
 SSL="$(brew --prefix openssl@3)"
@@ -68,24 +76,36 @@ bundle_into "$MACOS/$BIN" "$FW"
 # -- 4. GTK runtime: gdk-pixbuf loaders, GIO modules, schemas ------------------
 info "Bundling gdk-pixbuf loaders (SVG icons need librsvg)..."
 PIXBUF_VER=2.10.0
+SYS_LOADERS="$BREW/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders"
 PIXBUF_DST="$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders"
 mkdir -p "$PIXBUF_DST"
-cp "$BREW"/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders/*.so "$PIXBUF_DST/" 2>/dev/null || true
-# Generate the cache BEFORE rewriting deps: query-loaders dlopens each loader, and
-# once dylibbundler points its librsvg at @executable_path the loader won't load at
-# build time, so the svg loader would silently drop out of the cache (broken icons).
-GDK_PIXBUF_MODULEDIR="$PIXBUF_DST" \
-  "$BREW/bin/gdk-pixbuf-query-loaders" > "$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders.cache"
-# rewrite the absolute loader paths to a bundle-relative marker the launcher fixes up
-sed -i '' "s|$RES|@RES@|g" "$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders.cache" || true
+cp "$SYS_LOADERS"/*.so "$PIXBUF_DST/" 2>/dev/null || true
+# Build the cache from the SYSTEM loaders (they resolve @rpath/librsvg via Homebrew),
+# then rewrite the paths to the bundle. Querying the bundled copies would fail once
+# their librsvg is repointed, dropping the svg loader -> broken symbolic icons.
+"$BREW/bin/gdk-pixbuf-query-loaders" "$SYS_LOADERS"/*.so \
+  | sed "s|$SYS_LOADERS|@RES@/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders|g" \
+  > "$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders.cache"
+# librsvg is referenced as @rpath/... which dylibbundler can't rewrite inside a
+# plugin; copy it in and repoint the loaders at the bundle explicitly.
+cp "$RSVG/lib/librsvg-2.2.dylib" "$FW/" 2>/dev/null || true
+chmod u+w "$FW/librsvg-2.2.dylib" 2>/dev/null || true
 for so in "$PIXBUF_DST"/*.so; do
+  [ -e "$so" ] || continue
+  fix_rpath_refs "$so"
   bundle_into "$so" "$FW" || true
 done
+# pull librsvg's own dependency tree into Frameworks
+if [ -e "$FW/librsvg-2.2.dylib" ]; then
+  fix_rpath_refs "$FW/librsvg-2.2.dylib"
+  bundle_into "$FW/librsvg-2.2.dylib" "$FW" || true
+fi
 
-info "Bundling GIO modules..."
+info "Bundling GIO modules (if any)..."
 GIO_DST="$RES/lib/gio/modules"; mkdir -p "$GIO_DST"
 cp "$BREW"/lib/gio/modules/*.so "$GIO_DST/" 2>/dev/null || true
 for so in "$GIO_DST"/*.so; do
+  [ -e "$so" ] || continue
   bundle_into "$so" "$FW" || true
 done
 
