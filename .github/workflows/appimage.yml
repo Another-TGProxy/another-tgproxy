@@ -71,8 +71,7 @@ jobs:
             --output appimage \
             --desktop-file AppDir/usr/share/applications/space.ampernic.AnotherTGProxy.desktop \
             --icon-file AppDir/usr/share/icons/hicolor/scalable/apps/space.ampernic.AnotherTGProxy.svg
-          # appimagetool writes the product into the workspace root (tools are elsewhere)
-          mv Another*.AppImage "$OUTPUT"
+          # The appimage plugin honours $OUTPUT, so the file is already named for us.
           ls -la "$OUTPUT"
 
       - name: Upload artifact
