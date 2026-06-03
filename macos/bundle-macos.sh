@@ -21,7 +21,7 @@ FW="$CONTENTS/Frameworks"
 
 info() { echo "==> $*"; }
 
-# openssl@3 is keg-only — expose it to the compiler/linker (core uses find_library).
+# openssl@3 is keg-only - expose it to the compiler/linker (core uses find_library).
 SSL="$(brew --prefix openssl@3)"
 export PKG_CONFIG_PATH="$INSTALL/lib/pkgconfig:$SSL/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 export LIBRARY_PATH="$SSL/lib:${LIBRARY_PATH:-}"
@@ -39,30 +39,30 @@ if [ -d "$VAPI_DST" ]; then
   done
 fi
 
-# ── 1. Build core + gui into the staging prefix ───────────────────────────────
-info "Building core (mtproxy-ws)…"
+# -- 1. Build core + gui into the staging prefix -------------------------------
+info "Building core (mtproxy-ws)..."
 rm -rf "$INSTALL"
 meson setup "$CORE_SRC/_b" "$CORE_SRC" --prefix="$INSTALL" --buildtype=release -Dservice=false
 meson install -C "$CORE_SRC/_b"
 
-info "Building gui (another-tgproxy)…"
+info "Building gui (another-tgproxy)..."
 meson setup build --prefix="$INSTALL" --buildtype=release
 meson install -C build
 
-# ── 2. .app skeleton ─────────────────────────────────────────────────────────
-info "Assembling $APP…"
+# -- 2. .app skeleton ---------------------------------------------------------
+info "Assembling $APP..."
 chmod -R u+w "$DIST" 2>/dev/null || true; rm -rf "$DIST"
 mkdir -p "$MACOS" "$RES" "$FW"
 cp "$INSTALL/bin/$BIN" "$MACOS/$BIN"
 
-# ── 3. Vendor all non-system dylibs (incl. libmtproxyws) into Frameworks ──────
-info "Bundling dylibs with dylibbundler…"
+# -- 3. Vendor all non-system dylibs (incl. libmtproxyws) into Frameworks ------
+info "Bundling dylibs with dylibbundler..."
 dylibbundler -cd -of -b \
   -x "$MACOS/$BIN" \
   -d "$FW" -p "@executable_path/../Frameworks/"
 
-# ── 4. GTK runtime: gdk-pixbuf loaders, GIO modules, schemas ──────────────────
-info "Bundling gdk-pixbuf loaders (SVG icons need librsvg)…"
+# -- 4. GTK runtime: gdk-pixbuf loaders, GIO modules, schemas ------------------
+info "Bundling gdk-pixbuf loaders (SVG icons need librsvg)..."
 PIXBUF_VER=2.10.0
 PIXBUF_DST="$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders"
 mkdir -p "$PIXBUF_DST"
@@ -75,21 +75,21 @@ GDK_PIXBUF_MODULEDIR="$PIXBUF_DST" \
 # rewrite the absolute loader paths to a bundle-relative marker the launcher fixes up
 sed -i '' "s|$RES|@RES@|g" "$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders.cache" || true
 
-info "Bundling GIO modules…"
+info "Bundling GIO modules..."
 GIO_DST="$RES/lib/gio/modules"; mkdir -p "$GIO_DST"
 cp "$BREW"/lib/gio/modules/*.so "$GIO_DST/" 2>/dev/null || true
 for so in "$GIO_DST"/*.so; do
   dylibbundler -cd -of -b -x "$so" -d "$FW" -p "@executable_path/../Frameworks/" || true
 done
 
-info "Compiling GSettings schemas (GTK4 + Adwaita)…"
+info "Compiling GSettings schemas (GTK4 + Adwaita)..."
 SCHEMAS="$RES/glib-2.0/schemas"; mkdir -p "$SCHEMAS"
 cp "$BREW"/share/glib-2.0/schemas/org.gtk.gtk4.Settings*.xml "$SCHEMAS/" 2>/dev/null || true
 cp "$BREW"/share/glib-2.0/schemas/org.gnome.desktop.interface.gschema.xml "$SCHEMAS/" 2>/dev/null || true
 "$BREW/bin/glib-compile-schemas" "$SCHEMAS"
 
-# ── 5. Icons: our app icon + Adwaita symbolic + caches ────────────────────────
-info "Bundling icons…"
+# -- 5. Icons: our app icon + Adwaita symbolic + caches ------------------------
+info "Bundling icons..."
 mkdir -p "$RES/icons/hicolor/scalable/apps"
 cp "$INSTALL/share/icons/hicolor/scalable/apps/$APP_ID.svg" \
    "$RES/icons/hicolor/scalable/apps/"
@@ -102,8 +102,8 @@ cp "$BREW/share/icons/Adwaita/index.theme" "$RES/icons/Adwaita/" 2>/dev/null || 
 # translations
 cp -R "$INSTALL/share/locale" "$RES/" 2>/dev/null || true
 
-# ── 6. .icns from the app SVG ─────────────────────────────────────────────────
-info "Generating .icns…"
+# -- 6. .icns from the app SVG -------------------------------------------------
+info "Generating .icns..."
 ICONSET="$DIST/icon.iconset"; mkdir -p "$ICONSET"
 for s in 16 32 64 128 256 512; do
   "$BREW/bin/rsvg-convert" -w $s -h $s \
@@ -117,7 +117,7 @@ done
 iconutil -c icns "$ICONSET" -o "$RES/$BIN.icns"
 rm -rf "$ICONSET"
 
-# ── 7. Info.plist ─────────────────────────────────────────────────────────────
+# -- 7. Info.plist -------------------------------------------------------------
 APP_VERSION="$(awk -F\' '/version:/{print $2; exit}' meson.build)"
 cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -136,7 +136,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 
-# ── 8. launcher: set GTK runtime env, then exec the real binary ───────────────
+# -- 8. launcher: set GTK runtime env, then exec the real binary ---------------
 cat > "$MACOS/launcher" <<'LAUNCH'
 #!/bin/sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -156,8 +156,8 @@ exec "$DIR/another-tgproxy" "$@"
 LAUNCH
 chmod +x "$MACOS/launcher"
 
-# ── 9. DMG ────────────────────────────────────────────────────────────────────
-info "Creating DMG…"
+# -- 9. DMG --------------------------------------------------------------------
+info "Creating DMG..."
 ARCH="$(uname -m)"
 DMG="$DIST/${BIN}-${APP_VERSION}-${ARCH}.dmg"
 create-dmg --volname "$APP_NAME" --app-drop-link 420 180 \
