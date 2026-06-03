@@ -1,0 +1,15 @@
+# build
+build/
+_build/
+build-flatpak/
+.flatpak-builder/
+build-dir/
+repo/
+
+# i18n
+*.mo
+po/*.pot
+
+# editor
+*~
+.vscode/settings.json

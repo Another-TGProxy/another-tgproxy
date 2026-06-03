@@ -1,0 +1,6 @@
+option('profile',
+  type: 'combo',
+  choices: ['default', 'development'],
+  value: 'default',
+  description: 'Build profile; "development" uses a separate app-id (.Devel), name and config dir so it never clashes with an installed stable build'
+)

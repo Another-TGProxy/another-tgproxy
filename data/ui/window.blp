@@ -1,0 +1,82 @@
+using Gtk 4.0;
+using Adw 1;
+
+menu primary_menu {
+  item (_("About"), "win.about")
+  item (_("Quit"), "win.quit")
+}
+
+template $TgWsProxyWindow : Adw.ApplicationWindow {
+  default-width: 400;
+  default-height: 720;
+  width-request: 360;
+  height-request: 480;
+
+  Adw.Breakpoint {
+    condition ("max-width: 550px")
+    setters {
+      switcher.visible: false;
+      switcher_bar.reveal: true;
+    }
+  }
+
+  content: Adw.ToastOverlay toast_overlay {
+    Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        title-widget: Adw.ViewSwitcher switcher {
+          stack: stack;
+          policy: wide;
+        };
+
+        [end]
+        Gtk.MenuButton {
+          icon-name: "open-menu-symbolic";
+          menu-model: primary_menu;
+          primary: true;
+          tooltip-text: _("Main Menu");
+        }
+      }
+
+      [top]
+      Adw.Banner conn_banner {
+        title: _("Daemon is not running");
+        button-label: _("Start");
+        revealed: false;
+      }
+
+      [top]
+      Adw.Banner err_banner {
+        revealed: false;
+      }
+
+      content: Adw.ViewStack stack {
+        Adw.ViewStackPage {
+          name: "home";
+          title: _("Home");
+          icon-name: "user-home-symbolic";
+          child: $TgWsProxyHomeView home_view {};
+        }
+
+        Adw.ViewStackPage {
+          name: "settings";
+          title: _("Settings");
+          icon-name: "emblem-system-symbolic";
+          child: $TgWsProxySettingsView settings_view {};
+        }
+
+        Adw.ViewStackPage {
+          name: "log";
+          title: _("Log");
+          icon-name: "text-x-generic-symbolic";
+          child: $TgWsProxyLogView log_view {};
+        }
+      };
+
+      [bottom]
+      Adw.ViewSwitcherBar switcher_bar {
+        stack: stack;
+      }
+    }
+  };
+}

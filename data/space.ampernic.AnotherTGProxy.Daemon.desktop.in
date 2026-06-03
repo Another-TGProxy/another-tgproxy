@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Another TGProxy (фоновая служба)
+Comment=MTProto↔WebSocket прокси для Telegram
+Exec=@bindir@/tg-ws-proxy --daemon
+Icon=space.ampernic.AnotherTGProxy
+Terminal=false
+DBusActivatable=true
+NoDisplay=true
+X-GNOME-UsesNotifications=true

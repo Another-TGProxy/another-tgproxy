@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/space/ampernic/AnotherTGProxy">
+    <file alias="ui/window.ui" compressed="true" preprocess="xml-stripblanks">window.ui</file>
+    <file alias="ui/home-view.ui" compressed="true" preprocess="xml-stripblanks">home-view.ui</file>
+    <file alias="ui/settings-view.ui" compressed="true" preprocess="xml-stripblanks">settings-view.ui</file>
+    <file alias="ui/log-view.ui" compressed="true" preprocess="xml-stripblanks">log-view.ui</file>
+    <file alias="icons/scalable/apps/space.ampernic.AnotherTGProxy.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/apps/space.ampernic.AnotherTGProxy.svg</file>
+    <file alias="icons/scalable/apps/space.ampernic.AnotherTGProxy.Devel.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/apps/space.ampernic.AnotherTGProxy.Devel.svg</file>
+  </gresource>
+</gresources>

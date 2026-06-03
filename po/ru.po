@@ -1,0 +1,187 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: tg-ws-proxy\n"
+"Report-Msgid-Bugs-To: \n"
+"Language-Team: Russian\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+
+msgid "Home"
+msgstr "Главная"
+
+msgid "Settings"
+msgstr "Настройки"
+
+msgid "Log"
+msgstr "Журнал"
+
+msgid "About"
+msgstr "О приложении"
+
+msgid "Quit"
+msgstr "Выход"
+
+msgid "Main Menu"
+msgstr "Главное меню"
+
+msgid "Daemon is not running"
+msgstr "Демон не запущен"
+
+msgid "Start"
+msgstr "Запустить"
+
+msgid "Stop"
+msgstr "Остановить"
+
+msgid "Restart"
+msgstr "Перезапустить"
+
+msgid "Stopped"
+msgstr "Остановлено"
+
+msgid "Running"
+msgstr "Работает"
+
+msgid "Error"
+msgstr "Ошибка"
+
+msgid "Connection link"
+msgstr "Ссылка для подключения"
+
+msgid "Open"
+msgstr "Открыть"
+
+msgid "Status display"
+msgstr "Отображение статуса"
+
+msgid "Where the live proxy status is shown"
+msgstr "Где показывать живой статус прокси"
+
+msgid "Window"
+msgstr "Окно"
+
+msgid "Tray"
+msgstr "Трей"
+
+msgid "Background"
+msgstr "Фон"
+
+msgid "Notification"
+msgstr "Уведомление"
+
+msgid "Quick Settings"
+msgstr "Быстрые настройки"
+
+msgid "Status text"
+msgstr "Текст статуса"
+
+msgid "Template"
+msgstr "Шаблон"
+
+msgid "No system tray available in this environment"
+msgstr "В этом окружении системный трей недоступен"
+
+msgid "Only on GNOME under Flatpak"
+msgstr "Только в GNOME под Flatpak"
+
+msgid "Planned for Android"
+msgstr "Запланировано для Android"
+
+msgid "Open in Telegram"
+msgstr "Открыть в Telegram"
+
+msgid "Copy link"
+msgstr "Скопировать ссылку"
+
+msgid "Link copied"
+msgstr "Ссылка скопирована"
+
+msgid "Failed to open Telegram: %s"
+msgstr "Не удалось открыть Telegram: %s"
+
+msgid "Connections: %lld active / %lld total\n↑ %s    ↓ %s"
+msgstr "Соединений: %lld активных / %lld всего\n↑ %s    ↓ %s"
+
+msgid "Proxy"
+msgstr "Прокси"
+
+msgid "Host"
+msgstr "Хост"
+
+msgid "Port"
+msgstr "Порт"
+
+msgid "Secret (32 hex)"
+msgstr "Секрет (32 hex)"
+
+msgid "Generate"
+msgstr "Сгенерировать"
+
+msgid "DC:IP (space-separated, e.g. 2:149.154.167.220)"
+msgstr "DC:IP (через пробел, напр. 2:149.154.167.220)"
+
+msgid "Network"
+msgstr "Сеть"
+
+msgid "Cloudflare fallback"
+msgstr "Cloudflare-фолбэк"
+
+msgid "Verify CF domains' certificate"
+msgstr "Проверять сертификат CF-доменов"
+
+msgid "Disable only if you understand the risks"
+msgstr "Отключайте только при понимании рисков"
+
+msgid "WS pool size"
+msgstr "Размер пула WS"
+
+msgid "CF certificate verification is off — the connection is vulnerable to MITM at the CF node"
+msgstr "Проверка сертификата CF отключена — соединение уязвимо к MITM на CF-узле"
+
+msgid "Other"
+msgstr "Прочее"
+
+msgid "Write log to file"
+msgstr "Писать лог в файл"
+
+msgid "Autostart at login"
+msgstr "Автозапуск при входе"
+
+msgid "Background status"
+msgstr "Фоновый статус"
+
+msgid "GNOME “Background Apps” (Flatpak). Placeholders: {active} {total} {up} {down} {host} {port}"
+msgstr "GNOME «Фоновые приложения» (Flatpak). Плейсхолдеры: {active} {total} {up} {down} {host} {port}"
+
+msgid "Text template"
+msgstr "Шаблон текста"
+
+msgid "Save and apply"
+msgstr "Сохранить и применить"
+
+msgid "Settings saved"
+msgstr "Настройки сохранены"
+
+msgid "Proxy stopped"
+msgstr "Прокси остановлен"
+
+msgid "Failed to bind %s:%d — port already in use"
+msgstr "Не удалось занять %s:%d — порт уже используется"
+
+msgid "Service is not installed: %s not found"
+msgstr "Служба не установлена: %s не найден"
+
+msgid "Failed to start the service: %s"
+msgstr "Не удалось запустить службу: %s"
+
+msgid "Port %d is already in use — the proxy may already be running, possibly in another environment (e.g. Flatpak)."
+msgstr "Порт %d уже занят — прокси, возможно, уже запущен, в том числе в другом окружении (например, Flatpak)."
+
+msgid "The service failed to start."
+msgstr "Не удалось запустить службу."
+
+msgid "MTProto to WebSocket bridge proxy for Telegram"
+msgstr "MTProto↔WebSocket прокси для Telegram"

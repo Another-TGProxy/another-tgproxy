@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=@APP_NAME@
+Comment=MTProto to WebSocket bridge proxy for Telegram
+Exec=@BINARY@
+Icon=@APP_ID@
+Terminal=false
+Categories=Network;GTK;
+StartupNotify=true
+DBusActivatable=true

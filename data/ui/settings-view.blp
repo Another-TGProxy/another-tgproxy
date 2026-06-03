@@ -1,0 +1,109 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TgWsProxySettingsView : Adw.Bin {
+  child: Gtk.Box {
+    orientation: vertical;
+
+    Adw.Banner verify_cf_banner {
+      title: _("CF certificate verification is off — the connection is vulnerable to MITM at the CF node");
+      revealed: false;
+    }
+
+    Adw.PreferencesPage {
+      vexpand: true;
+
+      Adw.PreferencesGroup {
+        title: _("Proxy");
+
+        Adw.EntryRow host_row {
+          title: _("Host");
+        }
+
+        Adw.SpinRow port_row {
+          title: _("Port");
+          adjustment: Gtk.Adjustment {
+            lower: 1;
+            upper: 65535;
+            step-increment: 1;
+          };
+        }
+
+        Adw.PasswordEntryRow secret_row {
+          title: _("Secret (32 hex)");
+
+          [suffix]
+          Gtk.Button regen_btn {
+            icon-name: "view-refresh-symbolic";
+            tooltip-text: _("Generate");
+            valign: center;
+            styles ["flat"]
+          }
+        }
+
+        Adw.EntryRow dc_row {
+          title: _("DC:IP (space-separated, e.g. 2:149.154.167.220)");
+        }
+      }
+
+      Adw.PreferencesGroup {
+        title: _("Network");
+
+        Adw.SwitchRow cfproxy_row {
+          title: _("Cloudflare fallback");
+        }
+
+        Adw.SwitchRow verify_cf_row {
+          title: _("Verify CF domains' certificate");
+          subtitle: _("Disable only if you understand the risks");
+        }
+
+        Adw.SpinRow pool_row {
+          title: _("WS pool size");
+          adjustment: Gtk.Adjustment {
+            lower: 0;
+            upper: 64;
+            step-increment: 1;
+          };
+        }
+      }
+
+      Adw.PreferencesGroup {
+        title: _("Other");
+
+        Adw.SwitchRow logfile_row {
+          title: _("Write log to file");
+        }
+
+        Adw.SwitchRow autostart_row {
+          title: _("Autostart at login");
+        }
+      }
+
+      Adw.PreferencesGroup {
+        title: _("Status display");
+        description: _("Where the live proxy status is shown");
+
+        Adw.ToggleGroup status_mode_group {
+        }
+      }
+
+      Adw.PreferencesGroup status_text_group {
+        title: _("Status text");
+        description: _("Placeholders: {active} {total} {up} {down} {host} {port}");
+
+        Adw.EntryRow status_row {
+          title: _("Template");
+        }
+      }
+
+      Adw.PreferencesGroup {
+        Adw.ButtonRow save_row {
+          title: _("Save and apply");
+          start-icon-name: "document-save-symbolic";
+          styles ["suggested-action"]
+        }
+      }
+    }
+  };
+}

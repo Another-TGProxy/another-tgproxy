@@ -1,0 +1,20 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TgWsProxyLogView : Adw.Bin {
+  child: Gtk.ScrolledWindow scrolled {
+    vexpand: true;
+    hexpand: true;
+    hscrollbar-policy: never;
+    child: Gtk.TextView log_view {
+      editable: false;
+      monospace: true;
+      cursor-visible: false;
+      wrap-mode: word_char;
+      left-margin: 8;
+      right-margin: 8;
+      top-margin: 8;
+      bottom-margin: 8;
+    };
+  };
+}
