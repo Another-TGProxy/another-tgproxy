@@ -23,4 +23,7 @@
     <release version="2.0.0" date="2026-06-02"/>
   </releases>
   <content_rating type="oars-1.1"/>
+  <recommends>
+    <id>space.ampernic.AnotherTGProxy.Extension</id>
+  </recommends>
 </component>
