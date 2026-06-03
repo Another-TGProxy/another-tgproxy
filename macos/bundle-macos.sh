@@ -21,6 +21,12 @@ FW="$CONTENTS/Frameworks"
 
 info() { echo "==> $*"; }
 
+# dylibbundler search paths (librsvg etc. live in keg dirs it won't guess) and a
+# closed stdin so a still-missing lib fails fast instead of hanging on its prompt.
+RSVG="$(brew --prefix librsvg)"
+DB="dylibbundler -cd -of -b -s $BREW/lib -s $RSVG/lib"
+bundle_into() { $DB -x "$1" -d "$2" -p "@executable_path/../Frameworks/" </dev/null; }
+
 # openssl@3 is keg-only - expose it to the compiler/linker (core uses find_library).
 SSL="$(brew --prefix openssl@3)"
 export PKG_CONFIG_PATH="$INSTALL/lib/pkgconfig:$SSL/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
@@ -57,9 +63,7 @@ cp "$INSTALL/bin/$BIN" "$MACOS/$BIN"
 
 # -- 3. Vendor all non-system dylibs (incl. libmtproxyws) into Frameworks ------
 info "Bundling dylibs with dylibbundler..."
-dylibbundler -cd -of -b \
-  -x "$MACOS/$BIN" \
-  -d "$FW" -p "@executable_path/../Frameworks/"
+bundle_into "$MACOS/$BIN" "$FW"
 
 # -- 4. GTK runtime: gdk-pixbuf loaders, GIO modules, schemas ------------------
 info "Bundling gdk-pixbuf loaders (SVG icons need librsvg)..."
@@ -68,7 +72,7 @@ PIXBUF_DST="$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders"
 mkdir -p "$PIXBUF_DST"
 cp "$BREW"/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders/*.so "$PIXBUF_DST/" 2>/dev/null || true
 for so in "$PIXBUF_DST"/*.so; do
-  dylibbundler -cd -of -b -x "$so" -d "$FW" -p "@executable_path/../Frameworks/" || true
+  bundle_into "$so" "$FW" || true
 done
 GDK_PIXBUF_MODULEDIR="$PIXBUF_DST" \
   "$BREW/bin/gdk-pixbuf-query-loaders" > "$RES/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders.cache"
@@ -79,7 +83,7 @@ info "Bundling GIO modules..."
 GIO_DST="$RES/lib/gio/modules"; mkdir -p "$GIO_DST"
 cp "$BREW"/lib/gio/modules/*.so "$GIO_DST/" 2>/dev/null || true
 for so in "$GIO_DST"/*.so; do
-  dylibbundler -cd -of -b -x "$so" -d "$FW" -p "@executable_path/../Frameworks/" || true
+  bundle_into "$so" "$FW" || true
 done
 
 info "Compiling GSettings schemas (GTK4 + Adwaita)..."
