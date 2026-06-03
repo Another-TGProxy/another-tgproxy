@@ -117,14 +117,19 @@ cp "$BREW"/share/glib-2.0/schemas/org.gnome.desktop.interface.gschema.xml "$SCHE
 
 # -- 5. Icons: our app icon + Adwaita symbolic + caches ------------------------
 info "Bundling icons..."
+mkdir -p "$RES/icons"
+# Whole Adwaita theme (symbolic layout varies between versions; copying it all is
+# the only reliable way to get every -symbolic icon the UI references).
+cp -R "$BREW/share/icons/Adwaita" "$RES/icons/" 2>/dev/null || \
+  ditto "$BREW/share/icons/Adwaita" "$RES/icons/Adwaita"
+cp -R "$BREW/share/icons/hicolor" "$RES/icons/" 2>/dev/null || true
 mkdir -p "$RES/icons/hicolor/scalable/apps"
 cp "$INSTALL/share/icons/hicolor/scalable/apps/$APP_ID.svg" \
    "$RES/icons/hicolor/scalable/apps/"
-cp "$BREW/share/icons/hicolor/index.theme" "$RES/icons/hicolor/" 2>/dev/null || true
-mkdir -p "$RES/icons/Adwaita"
-cp -R "$BREW/share/icons/Adwaita/symbolic" "$RES/icons/Adwaita/" 2>/dev/null || true
-cp "$BREW/share/icons/Adwaita/index.theme" "$RES/icons/Adwaita/" 2>/dev/null || true
+chmod -R u+w "$RES/icons"
+"$BREW/bin/gtk4-update-icon-cache" -q -t -f "$RES/icons/Adwaita"  2>/dev/null || true
 "$BREW/bin/gtk4-update-icon-cache" -q -t -f "$RES/icons/hicolor" 2>/dev/null || true
+echo "    bundled $(find "$RES/icons/Adwaita" -name '*-symbolic.svg' | wc -l | tr -d ' ') Adwaita symbolic icons"
 
 # translations
 cp -R "$INSTALL/share/locale" "$RES/" 2>/dev/null || true
