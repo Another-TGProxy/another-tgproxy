@@ -113,7 +113,7 @@ namespace TgWsProxy {
                     "org.freedesktop.Application",
                     "ActivateAction",
                     new Variant ("(sava{sv})", "quit", new Variant.array (VariantType.VARIANT, {}),
-                                 new Variant ("a{sv}", null)),
+                                 new Variant.array (new VariantType ("{sv}"), {})),
                     null, DBusCallFlags.NONE, -1, null);
             } catch (Error e) {
                 // fall back to nothing; the GUI also sends IPC "stop"
