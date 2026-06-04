@@ -146,7 +146,12 @@ executable('another-tgproxy',
 subdir('po')
 subdir('data')
 
-gnome.post_install(
-  gtk_update_icon_cache: true,
-  update_desktop_database: true,
-)
+# Desktop-install hooks (icon cache / desktop database). Skipped on the Android
+# cross build: they'd run cross-built host tools (gtk4-update-icon-cache) that
+# need an exe_wrapper, and an APK has no such caches anyway.
+if host_machine.system() != 'android'
+  gnome.post_install(
+    gtk_update_icon_cache: true,
+    update_desktop_database: true,
+  )
+endif
