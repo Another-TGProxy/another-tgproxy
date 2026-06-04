@@ -106,6 +106,13 @@ jobs:
                         usr/share/vala/vapi/libadwaita-1.vapi usr/share/vala/vapi/libadwaita-1.deps \
                         "$v"/ || true
           done
+          # valac gates "[Version (since=...)]" symbols on the host pkg-config
+          # modversion; apt's libadwaita-1.pc still says 1.5, so the 1.7 widgets
+          # in the overlaid vapi get rejected. Bump it (the target C side reads
+          # the cross pkg-config from Pixiewood, not this).
+          for pc in /usr/lib/*/pkgconfig/libadwaita-1.pc /usr/lib/pkgconfig/libadwaita-1.pc; do
+            [ -f "$pc" ] && sudo sed -i 's/^Version:.*/Version: 1.7.0/' "$pc"
+          done
           # Expose the newer typelibs (prepended) to blueprint-compiler.
           echo "GI_TYPELIB_PATH=$D/usr/lib/girepository-1.0" >> "$GITHUB_ENV"
 
