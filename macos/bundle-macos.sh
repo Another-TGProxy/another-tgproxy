@@ -118,20 +118,26 @@ cp "$BREW"/share/glib-2.0/schemas/org.gnome.desktop.interface.gschema.xml "$SCHE
 # -- 5. Icons: our app icon + Adwaita symbolic + caches ------------------------
 info "Bundling icons..."
 mkdir -p "$RES/icons"
-# Whole Adwaita theme (symbolic layout varies between versions; copying it all is
-# the only reliable way to get every -symbolic icon the UI references).
-cp -R "$BREW/share/icons/Adwaita" "$RES/icons/" 2>/dev/null || \
-  ditto "$BREW/share/icons/Adwaita" "$RES/icons/Adwaita"
-cp -R "$BREW/share/icons/hicolor" "$RES/icons/" 2>/dev/null || true
+# -L dereferences Homebrew's symlinks: share/icons/Adwaita is a link into the Cellar,
+# so a plain cp -R would copy the link (broken once distributed) instead of the files.
+cp -RL "$BREW/share/icons/Adwaita" "$RES/icons/Adwaita"
+cp -RL "$BREW/share/icons/hicolor" "$RES/icons/hicolor" 2>/dev/null || true
 mkdir -p "$RES/icons/hicolor/scalable/apps"
 cp "$INSTALL/share/icons/hicolor/scalable/apps/$APP_ID.svg" \
    "$RES/icons/hicolor/scalable/apps/"
 chmod -R u+w "$RES/icons"
-# Drop any icon-theme.cache: a -t cache (or Homebrew's, built for its own paths) can
-# shadow real icons so lookups fail. With index.theme present GTK4 scans the dirs
-# directly and reliably finds every icon.
+# Drop any icon-theme.cache: a stale/foreign cache shadows real icons. With
+# index.theme present GTK4 scans the directories directly and finds every icon.
 find "$RES/icons" -name icon-theme.cache -delete 2>/dev/null || true
-echo "    bundled $(find "$RES/icons/Adwaita" -name '*-symbolic.svg' | wc -l | tr -d ' ') Adwaita symbolic icons"
+# self-check: prove the icons the UI references actually landed in the bundle
+echo "    icon bundle self-check:"
+for i in symbolic/status/network-offline-symbolic symbolic/status/network-transmit-receive-symbolic \
+         symbolic/status/dialog-error-symbolic symbolic/places/user-home-symbolic \
+         symbolic/mimetypes/text-x-generic-symbolic symbolic/actions/send-to-symbolic \
+         symbolic/legacy/emblem-system-symbolic; do
+  if [ -f "$RES/icons/Adwaita/$i.svg" ]; then echo "      OK       $i"; else echo "      MISSING  $i"; fi
+done
+echo "    index.theme symbolic dirs: $(grep -c '^\[symbolic' "$RES/icons/Adwaita/index.theme" 2>/dev/null || echo 0); total symbolic svgs: $(find "$RES/icons/Adwaita" -name '*-symbolic.svg' | wc -l | tr -d ' ')"
 
 # translations
 cp -R "$INSTALL/share/locale" "$RES/" 2>/dev/null || true
