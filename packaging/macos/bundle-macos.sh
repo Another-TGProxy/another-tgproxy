@@ -139,6 +139,11 @@ for i in symbolic/status/network-offline-symbolic symbolic/status/network-transm
 done
 echo "    index.theme symbolic dirs: $(grep -c '^\[symbolic' "$RES/icons/Adwaita/index.theme" 2>/dev/null || echo 0); total symbolic svgs: $(find "$RES/icons/Adwaita" -name '*-symbolic.svg' | wc -l | tr -d ' ')"
 
+# menu-bar tray icon: a template PNG from the app's symbolic glyph (same as the extension)
+"$BREW/bin/rsvg-convert" -w 36 -h 36 \
+  data/icons/hicolor/scalable/actions/another-tgproxy-symbolic.svg \
+  -o "$RES/tray-icon.png" 2>/dev/null || true
+
 # translations
 cp -R "$INSTALL/share/locale" "$RES/" 2>/dev/null || true
 
@@ -194,6 +199,7 @@ export GDK_PIXBUF_MODULE_FILE="$CACHE_DIR/loaders.cache"
 export XDG_DATA_DIRS="$RES:$RES/share"
 # so the GUI can re-spawn itself as the background daemon (no /proc on macOS)
 export ANOTHER_TGPROXY_EXE="$DIR/another-tgproxy"
+export ANOTHER_TGPROXY_TRAY_ICON="$RES/tray-icon.png"
 exec "$DIR/another-tgproxy" "$@"
 LAUNCH
 chmod +x "$MACOS/launcher"

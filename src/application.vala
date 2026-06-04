@@ -45,7 +45,12 @@ namespace TgWsProxy {
             tray_client = new DaemonClient ();
             tray_client.status_changed.connect (on_tray_status);
             tray_client.start ();
-            tray = Mac.tray_new (on_tray_action);
+            // The bundle's launcher points this at a template PNG of the app's
+            // symbolic icon; empty in a dev run -> the shim falls back to a symbol.
+            var icon = Environment.get_variable ("ANOTHER_TGPROXY_TRAY_ICON") ?? "";
+            tray = Mac.tray_new (on_tray_action, icon,
+                _("Open"), _("Open in Telegram"),
+                _("Start"), _("Stop"), _("Restart"), _("Quit"));
             hold ();   // keep the menu-bar item alive after the window closes
         }
 
