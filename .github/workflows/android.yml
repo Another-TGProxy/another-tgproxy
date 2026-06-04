@@ -72,7 +72,7 @@ jobs:
             --android-studio-dir "$ANDROID_HOME" \
             --meson /usr/local/bin/meson -v
           perl "$PW" generate -v
-          perl "$PW" build -v
+          perl "$PW" build
 
       - name: Collect APKs
         if: always()
