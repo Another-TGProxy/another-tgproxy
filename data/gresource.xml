@@ -7,5 +7,19 @@
     <file alias="ui/log-view.ui" compressed="true" preprocess="xml-stripblanks">log-view.ui</file>
     <file alias="icons/scalable/apps/space.ampernic.AnotherTGProxy.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/apps/space.ampernic.AnotherTGProxy.svg</file>
     <file alias="icons/scalable/apps/space.ampernic.AnotherTGProxy.Devel.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/apps/space.ampernic.AnotherTGProxy.Devel.svg</file>
+    <!-- Symbolic icons the UI references by name. Bundled so they resolve where
+         no system icon theme is installed (Android); the icon resource path is
+         registered in Application.startup. Harmless on desktop. -->
+    <file alias="icons/scalable/status/network-transmit-receive-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/status/network-transmit-receive-symbolic.svg</file>
+    <file alias="icons/scalable/status/network-offline-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/status/network-offline-symbolic.svg</file>
+    <file alias="icons/scalable/status/dialog-error-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/status/dialog-error-symbolic.svg</file>
+    <file alias="icons/scalable/actions/send-to-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/send-to-symbolic.svg</file>
+    <file alias="icons/scalable/actions/edit-copy-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/edit-copy-symbolic.svg</file>
+    <file alias="icons/scalable/actions/view-refresh-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/view-refresh-symbolic.svg</file>
+    <file alias="icons/scalable/actions/document-save-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/document-save-symbolic.svg</file>
+    <file alias="icons/scalable/actions/open-menu-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/open-menu-symbolic.svg</file>
+    <file alias="icons/scalable/places/user-home-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/places/user-home-symbolic.svg</file>
+    <file alias="icons/scalable/mimetypes/text-x-generic-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/mimetypes/text-x-generic-symbolic.svg</file>
+    <file alias="icons/scalable/emblems/emblem-system-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/emblems/emblem-system-symbolic.svg</file>
   </gresource>
 </gresources>
