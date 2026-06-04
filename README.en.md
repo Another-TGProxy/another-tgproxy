@@ -91,7 +91,7 @@ placeholders are filled with the current `main`):
 flatpak install flathub org.gnome.Sdk//49 org.gnome.Platform//49 org.flatpak.Builder
 sed -e "s/__CORE_COMMIT__/$(git ls-remote https://github.com/Another-TGProxy/mtproxy-ws.git main | cut -f1)/" \
     -e "s/__GUI_COMMIT__/$(git rev-parse HEAD)/" \
-    gui/flatpak/space.ampernic.AnotherTGProxy.yml > /tmp/manifest.yml
+    gui/packaging/flatpak/space.ampernic.AnotherTGProxy.yml > /tmp/manifest.yml
 flatpak run org.flatpak.Builder --user --install --force-clean build-flatpak /tmp/manifest.yml
 ```
 

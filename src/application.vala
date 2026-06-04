@@ -2,6 +2,15 @@
 namespace TgWsProxy {
 
     public class Application : Adw.Application {
+#if DARWIN
+        // The macOS menu-bar item lives in this (GTK) process — it pumps the AppKit
+        // run loop — and outlives the window, so the app holds itself open for it.
+        void* tray = null;
+        DaemonClient? tray_client = null;
+        ServiceController? tray_service = null;
+        bool tray_running = false;
+        string tray_link = "";
+#endif
 
         public Application () {
             Object (
@@ -16,6 +25,9 @@ namespace TgWsProxy {
             // running uninstalled: the icons are bundled in the app resources.
             Gtk.IconTheme.get_for_display (Gdk.Display.get_default ())
                 .add_resource_path ("/" + Build.APP_ID.replace (".", "/") + "/icons");
+#if DARWIN
+            setup_mac_tray ();
+#endif
         }
 
         protected override void activate () {
@@ -25,5 +37,56 @@ namespace TgWsProxy {
             }
             win.present ();
         }
+
+#if DARWIN
+        void setup_mac_tray () {
+            var cfg = Config.load ();
+            tray_service = new ServiceController (cfg);
+            tray_client = new DaemonClient ();
+            tray_client.status_changed.connect (on_tray_status);
+            tray_client.start ();
+            tray = Mac.tray_new (on_tray_action);
+            hold ();   // keep the menu-bar item alive after the window closes
+        }
+
+        void on_tray_status (Status s) {
+            tray_running = s.running;
+            if (s.secret.length == 32)
+                tray_link = "tg://proxy?server=%s&port=%d&secret=dd%s".printf (
+                    s.host, s.port, s.secret);
+            if (tray != null)
+                Mac.tray_update (tray,
+                    s.running ? _("Another TGProxy — running")
+                              : _("Another TGProxy — stopped"),
+                    s.running ? 1 : 0);
+        }
+
+        void on_tray_action (int action) {
+            switch (action) {
+            case 0:   // Open
+                activate ();
+                break;
+            case 1:   // Open in Telegram
+                if (tray_link != "") {
+                    try { AppInfo.launch_default_for_uri (tray_link, null); }
+                    catch (Error e) { warning ("open telegram: %s", e.message); }
+                }
+                break;
+            case 2:   // toggle start/stop
+                if (tray_running) { tray_client.send ("stop"); tray_service.stop (); }
+                else tray_service.start ();
+                break;
+            case 3:   // Restart
+                tray_client.send ("reload");
+                break;
+            case 4:   // Quit
+                tray_client.send ("stop");
+                if (tray != null) { Mac.tray_free (tray); tray = null; }
+                release ();
+                quit ();
+                break;
+            }
+        }
+#endif
     }
 }

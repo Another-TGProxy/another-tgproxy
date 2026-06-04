@@ -3,7 +3,7 @@
 # Expects core (mtproxy-ws) sources under $CORE_SRC (default ../_core) and runs
 # from the gui repo root. Homebrew provides gtk4/libadwaita/vala/etc.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 BREW="$(brew --prefix)"
 CORE_SRC="${CORE_SRC:-_core}"

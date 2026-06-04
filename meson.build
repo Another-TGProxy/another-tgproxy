@@ -103,12 +103,23 @@ sources = files(
   'src/controller/service.vala',
 )
 
+# Platform-specific extras (macOS menu-bar tray via NSStatusItem).
+mac_sources = []
+extra_deps = []
+inc_dirs = ['.']
+if host_machine.system() == 'darwin'
+  add_languages('objc', native: false)
+  mac_sources = files('src/mac/mac_tray.m', 'src/mac/mac_tray.vapi')
+  extra_deps += dependency('appleframeworks', modules: ['Cocoa'])
+  inc_dirs += 'src/mac'
+endif
+
 executable('another-tgproxy',
-  sources, config_h, resources,
-  dependencies: deps,
+  sources, mac_sources, config_h, resources,
+  dependencies: deps + extra_deps,
   vala_args: vala_extra,
   c_args: ['-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name())],
-  include_directories: include_directories('.'),
+  include_directories: include_directories(inc_dirs),
   install: true,
 )
 

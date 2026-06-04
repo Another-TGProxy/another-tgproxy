@@ -52,7 +52,7 @@ jobs:
       - name: Build app + bundle .app/.dmg
         env:
           CORE_SRC: _core
-        run: bash macos/bundle-macos.sh
+        run: bash packaging/macos/bundle-macos.sh
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
