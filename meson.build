@@ -45,7 +45,10 @@ conf.set_quoted('BUGTRACKER', bugtracker)
 conf.set10('IS_DEVEL', is_devel)
 config_h = configure_file(output: 'build-config.h', configuration: conf)
 
-mtproxy_dep = dependency('mtproxy-ws')   # the core: libmtproxyws + headers
+# Use the system core on desktop; on Android (no system lib) fall back to the
+# mtproxy-ws meson subproject (subprojects/mtproxy-ws.wrap).
+mtproxy_dep = dependency('mtproxy-ws',
+  fallback: ['mtproxy-ws', 'mtproxyws_dep'])
 deps = [
   dependency('glib-2.0'),
   dependency('gio-2.0'),
@@ -63,8 +66,11 @@ if host_machine.system() == 'darwin'
   # GDesktopAppInfo / SNI / session D-Bus are Linux-only; macOS code paths are
   # guarded with #if DARWIN in the Vala sources.
   vala_extra += ['--define=DARWIN']
+elif host_machine.system() == 'android'
+  # Android is single-process (no daemon/D-Bus/tray); #if ANDROID code paths.
+  vala_extra += ['--define=ANDROID']
 endif
-mtproxy_vapidir = mtproxy_dep.get_variable(pkgconfig: 'vapidir', default_value: '')
+mtproxy_vapidir = mtproxy_dep.get_variable('vapidir', default_value: '')
 if mtproxy_vapidir != ''
   vala_extra += ['--vapidir', mtproxy_vapidir]
 endif
@@ -96,12 +102,18 @@ sources = files(
   'src/ui/home-view.vala',
   'src/ui/settings-view.vala',
   'src/ui/log-view.vala',
-  'src/daemon/daemon.vala',
-  'src/daemon/control.vala',
-  'src/daemon/tray.vala',
   'src/controller/client.vala',
   'src/controller/service.vala',
+  'src/android/engine_host.vala',   # #if ANDROID — empty elsewhere
 )
+if host_machine.system() != 'android'
+  # The separate daemon + its D-Bus/SNI presenters are desktop-only.
+  sources += files(
+    'src/daemon/daemon.vala',
+    'src/daemon/control.vala',
+    'src/daemon/tray.vala',
+  )
+endif
 
 # Platform-specific extras (macOS menu-bar tray via NSStatusItem).
 mac_sources = []
@@ -114,12 +126,20 @@ if host_machine.system() == 'darwin'
   inc_dirs += 'src/mac'
 endif
 
+# android_exe_type is a Pixiewood meson-fork kwarg; only pass it when targeting
+# Android so plain meson doesn't choke on an unknown kwarg.
+exe_kwargs = {}
+if host_machine.system() == 'android'
+  exe_kwargs = {'android_exe_type': 'application'}
+endif
+
 executable('another-tgproxy',
   sources, mac_sources, config_h, resources,
   dependencies: deps + extra_deps,
   vala_args: vala_extra,
   c_args: ['-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name())],
   include_directories: include_directories(inc_dirs),
+  kwargs: exe_kwargs,
   install: true,
 )
 

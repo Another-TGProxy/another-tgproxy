@@ -1,20 +1,31 @@
 name: Android (experimental)
 
-# Validates the GTK-on-Android (Pixiewood) pipeline on a runner: it has the disk
-# and lets us install the full toolchain. Stage 1 builds a minimal GTK4/libadwaita
-# demo APK; once that is green the real (ported) app reuses the same pipeline.
+# GTK-on-Android (Pixiewood) build of the real app. Single-process: the C engine
+# (mtproxy-ws, pulled as a meson subproject) runs in the GUI process — no daemon,
+# D-Bus or tray (those Vala paths are behind #if !ANDROID). OpenSSL, which the core
+# links for the outbound wss:// TLS, is cross-built static and staged into the NDK
+# sysroot. The minimal demo under packaging/android/{demo,vala-demo} stays as a
+# known-good toolchain reference (build it manually with the steps below).
 on:
   workflow_dispatch:
   push:
     paths:
+      - 'src/**'
+      - 'data/**'
+      - 'meson.build'
+      - 'subprojects/*.wrap'
       - 'packaging/android/**'
       - '.github/workflows/android.yml'
 
 permissions:
   contents: read
 
+env:
+  OPENSSL_BRANCH: openssl-3.3
+  ANDROID_API: '35'
+
 jobs:
-  demo-apk:
+  app-apk:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,8 +41,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential ninja-build sassc glslc libxml2-utils \
-            libglib2.0-dev-bin gobject-introspection python3 \
-            valac libgtk-4-dev libadwaita-1-dev \
+            libglib2.0-dev-bin gobject-introspection python3 gettext \
+            valac libgtk-4-dev libadwaita-1-dev libjson-glib-dev \
+            blueprint-compiler desktop-file-utils \
             libglib-perl libglib-object-introspection-perl libipc-run-perl \
             libjson-perl libset-scalar-perl libxml-libxml-perl libxml-libxslt-perl \
             gir1.2-appstream-1.0 openjdk-17-jdk-headless
@@ -48,17 +60,39 @@ jobs:
       - name: Install NDK + platform + build-tools
         run: |
           yes | sdkmanager --install \
-            "platform-tools" "platforms;android-35" "build-tools;35.0.0" \
-            "ndk;27.2.12479018" "cmake;3.22.1" >/dev/null
+            "platform-tools" "platforms;android-${ANDROID_API}" \
+            "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1" >/dev/null
           ls "$ANDROID_HOME/ndk"
+
+      - name: OpenSSL (static, arm64) into the NDK sysroot
+        run: |
+          set -eux
+          NDK=$(ls -d "$ANDROID_HOME/ndk/"*/ | head -n1)
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+          export ANDROID_NDK_ROOT="$NDK"
+          export PATH="$TOOLCHAIN/bin:$PATH"
+          git clone --depth 1 -b "$OPENSSL_BRANCH" \
+            https://github.com/openssl/openssl "$RUNNER_TEMP/openssl"
+          cd "$RUNNER_TEMP/openssl"
+          ./Configure android-arm64 "-D__ANDROID_API__=$ANDROID_API" \
+            no-shared no-tests no-apps --prefix="$RUNNER_TEMP/ossl"
+          make -j"$(nproc)" >/dev/null
+          make install_sw >/dev/null
+          # The core's cc.find_library('ssl'/'crypto') searches the cross
+          # compiler's default paths, i.e. the NDK sysroot.
+          SYS="$TOOLCHAIN/sysroot/usr"
+          cp -v "$RUNNER_TEMP/ossl/lib/libssl.a" \
+                "$RUNNER_TEMP/ossl/lib/libcrypto.a" \
+                "$SYS/lib/aarch64-linux-android/"
+          cp -rv "$RUNNER_TEMP/ossl/include/openssl" "$SYS/include/"
 
       - name: Forked meson (android branch) + Pixiewood
         run: |
           git clone --depth 1 -b android-apk https://github.com/sp1ritCS/meson "$RUNNER_TEMP/meson"
           git clone --depth 1 https://github.com/sp1ritCS/gtk-android-builder "$RUNNER_TEMP/pw"
-          # Recent GTK's Android backend uses API-35 keycodes (AKEYCODE_KEYBOARD_BACKLIGHT_*,
-          # Android 15); Pixiewood pins the NDK clang target to API 31. Bump it to 35.
-          sed -i "s/+'31-clang/+'35-clang/g" "$RUNNER_TEMP/pw/prepare/android.cross"
+          # Recent GTK's Android backend uses API-35 keycodes; Pixiewood pins the
+          # NDK clang target to API 31. Bump it to 35.
+          sed -i "s/+'31-clang/+'${ANDROID_API}-clang/g" "$RUNNER_TEMP/pw/prepare/android.cross"
           # Pixiewood needs the FORKED meson everywhere (only it understands
           # android_exe_type), both via --meson and as plain `meson` on PATH.
           printf '#!/bin/sh\nexec python3 "%s/meson.py" "$@"\n' "$RUNNER_TEMP/meson" \
@@ -66,12 +100,13 @@ jobs:
           sudo chmod +x /usr/local/bin/meson
           meson --version
 
-      - name: Build demo APK (Pixiewood)
-        working-directory: packaging/android/vala-demo
+      - name: Build app APK (Pixiewood)
         run: |
           set -x
           PW="$RUNNER_TEMP/pw/pixiewood"
-          perl "$PW" prepare pixiewood.xml \
+          # Run from the repo root: meson.build is here, so the manifest's src://
+          # paths resolve against it.
+          perl "$PW" prepare packaging/android/app/pixiewood.xml \
             --sdk "$ANDROID_HOME" \
             --android-studio-dir "$ANDROID_HOME" \
             --meson /usr/local/bin/meson -v
@@ -82,13 +117,13 @@ jobs:
         if: always()
         run: |
           mkdir -p "$GITHUB_WORKSPACE/android-apks"
-          find packaging/android/vala-demo -name '*.apk' -exec cp -v {} "$GITHUB_WORKSPACE/android-apks/" \;
+          find . -name '*.apk' -exec cp -v {} "$GITHUB_WORKSPACE/android-apks/" \;
           ls -la "$GITHUB_WORKSPACE/android-apks/" || true
 
       - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: adwdemo-apk
+          name: another-tgproxy-apk
           path: android-apks/*.apk
           if-no-files-found: warn

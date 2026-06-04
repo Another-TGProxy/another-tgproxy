@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Pixiewood manifest for the real app. Run from the GUI repo root (where
+     meson.build lives), so src:// paths are relative to that root. json-glib and
+     the mtproxy-ws core are pulled as ordinary meson subproject wraps (see
+     subprojects/); OpenSSL for the core is staged into the NDK sysroot by CI. -->
+<app xmlns="https://sp1rit.arpa/pixiewood/" xmlns:xi="http://www.w3.org/2001/XInclude">
+	<metainfo vercalc="count">
+		<xi:include href="src://packaging/android/app/space.ampernic.AnotherTGProxy.metainfo.xml" parse="xml"/>
+	</metainfo>
+	<style>
+		<theme name="adw"/>
+		<icon type="generate">
+			<drawable target="foreground" type="avd" path="src://packaging/android/app/foreground.xml"/>
+			<color target="background">#1C71D8</color>
+		</icon>
+	</style>
+	<dependencies>
+		<glib>
+			<patch>hack</patch>
+		</glib>
+		<fontconfig/>
+		<gtk/>
+		<libadwaita/>
+	</dependencies>
+	<build target="another-tgproxy">
+		<architectures>
+			<arch>aarch64</arch>
+		</architectures>
+	</build>
+</app>

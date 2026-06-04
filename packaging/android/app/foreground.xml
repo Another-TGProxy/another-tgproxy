@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-made Android VectorDrawable (type="avd") so Pixiewood's generate step
+     doesn't need Android Studio's Svg2Vector. White paper plane on the blue
+     adaptive-icon background, matching the desktop app icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M30,72 L78,54 L30,36 L30,49 L60,54 L30,59 Z"/>
+</vector>

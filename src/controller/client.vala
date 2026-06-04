@@ -7,6 +7,23 @@ namespace TgWsProxy {
         public signal void status_changed (Status status);
         public signal void connection_changed (bool connected);
 
+#if ANDROID
+        // Single-process on Android: the "control channel" is the in-process
+        // EngineHost rather than a Unix socket to a separate daemon.
+        public void start () {
+            var h = EngineHost.instance ();
+            h.status_changed.connect ((s) => status_changed (s));
+            connection_changed (true);
+            status_changed (h.snapshot ());
+        }
+        public void stop () { }
+        public void send (string cmd) {
+            var h = EngineHost.instance ();
+            if (cmd == "stop") h.stop ();
+            else if (cmd == "reload") h.reload ();
+            else if (cmd == "status") status_changed (h.snapshot ());
+        }
+#else
         SocketConnection? conn = null;
         OutputStream? os = null;
         bool want_connected = false;
@@ -82,5 +99,6 @@ namespace TgWsProxy {
             Timeout.add (ms, () => { sleep_async.callback (); return Source.REMOVE; });
             yield;
         }
+#endif
     }
 }

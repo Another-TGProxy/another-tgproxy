@@ -21,9 +21,11 @@ int main (string[] args) {
     if (args.length > 1 && args[1] == "--proxy") {
         return TgWsProxy.run_proxy (args);    // headless C engine relay
     }
+#if !ANDROID
     if (args.length > 1 && args[1] == "--daemon") {
         return TgWsProxy.run_daemon (args);   // background daemon + control IPC
     }
+#endif
     Environment.set_application_name (Build.APP_NAME);
     Adw.init ();
     var app = new TgWsProxy.Application ();

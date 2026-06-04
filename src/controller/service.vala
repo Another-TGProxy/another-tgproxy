@@ -11,8 +11,20 @@ namespace TgWsProxy {
 
         public ServiceController (Config cfg) {
             this.cfg = cfg;
+#if ANDROID
+            EngineHost.instance ().failed.connect ((m) => failed (m));
+#endif
         }
 
+#if ANDROID
+        // Single-process on Android: drive the in-process EngineHost directly.
+        public void start () { EngineHost.instance ().start (); }
+        public void stop () { EngineHost.instance ().stop (); }
+        public void restart () { EngineHost.instance ().reload (); }
+        public bool is_active () { return EngineHost.instance ().running; }
+        public void set_autostart (bool on) { }
+        public bool is_autostart () { return false; }
+#else
         static string object_path () {
             return "/" + Build.DAEMON_ID.replace (".", "/");
         }
@@ -198,5 +210,6 @@ namespace TgWsProxy {
                 return "another-tgproxy";
             }
         }
+#endif
     }
 }
