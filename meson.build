@@ -69,6 +69,17 @@ if host_machine.system() == 'darwin'
 elif host_machine.system() == 'android'
   # Android is single-process (no daemon/D-Bus/tray); #if ANDROID code paths.
   vala_extra += ['--define=ANDROID']
+  # The target gtk4/libadwaita/json-glib come from vapi-less Pixiewood/wrap
+  # subprojects, so meson can't auto-add their --pkg for valac. Name them
+  # explicitly; valac binds against the host vapis (generated C is cross-built
+  # against the real Android headers/libs).
+  vala_extra += [
+    '--pkg', 'gtk4',
+    '--pkg', 'libadwaita-1',
+    '--pkg', 'json-glib-1.0',
+    '--pkg', 'gio-2.0',
+    '--pkg', 'gio-unix-2.0',
+  ]
 endif
 mtproxy_vapidir = mtproxy_dep.get_variable('vapidir', default_value: '')
 if mtproxy_vapidir != ''
