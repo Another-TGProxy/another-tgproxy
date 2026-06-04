@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <app xmlns="https://sp1rit.arpa/pixiewood/" xmlns:xi="http://www.w3.org/2001/XInclude">
 	<metainfo vercalc="count">
-		<xi:include href="build://aarch64/share/metainfo/space.ampernic.AdwDemo.metainfo.xml" parse="xml"/>
+		<xi:include href="src://space.ampernic.AdwDemo.metainfo.xml" parse="xml"/>
 	</metainfo>
 	<style>
 		<theme name="adw"/>
