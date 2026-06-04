@@ -86,6 +86,29 @@ jobs:
                 "$SYS/lib/aarch64-linux-android/"
           cp -rv "$RUNNER_TEMP/ossl/include/openssl" "$SYS/include/"
 
+      - name: Current gtk4/libadwaita vapi + typelib for host valac/blueprint
+        run: |
+          set -eux
+          # ubuntu-latest ships libadwaita 1.5; the app needs 1.7 widgets
+          # (Adw.WrapBox/ToggleGroup/ButtonRow). valac (host vapi) and
+          # blueprint-compiler (host GI typelib) both need the newer defs.
+          # Cross-built target libs come from Pixiewood; this only updates the
+          # HOST tooling. Arch's rolling packages have stable download URLs.
+          sudo apt-get install -y --no-install-recommends zstd libarchive-tools
+          D="$RUNNER_TEMP/arch"; mkdir -p "$D"; cd "$D"
+          for p in gtk4 libadwaita; do
+            curl -fL "https://archlinux.org/packages/extra/x86_64/$p/download/" -o "$p.pkg.tar.zst"
+            bsdtar -xf "$p.pkg.tar.zst"
+          done
+          # Overlay the newer vapis where valac looks.
+          for v in /usr/share/vala*/vapi; do
+            sudo cp -vf usr/share/vala/vapi/gtk4.vapi usr/share/vala/vapi/gtk4.deps \
+                        usr/share/vala/vapi/libadwaita-1.vapi usr/share/vala/vapi/libadwaita-1.deps \
+                        "$v"/ || true
+          done
+          # Expose the newer typelibs (prepended) to blueprint-compiler.
+          echo "GI_TYPELIB_PATH=$D/usr/lib/girepository-1.0" >> "$GITHUB_ENV"
+
       - name: Forked meson (android branch) + Pixiewood
         run: |
           git clone --depth 1 -b android-apk https://github.com/sp1ritCS/meson "$RUNNER_TEMP/meson"
