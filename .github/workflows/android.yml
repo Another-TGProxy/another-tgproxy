@@ -55,6 +55,9 @@ jobs:
         run: |
           git clone --depth 1 -b android-apk https://github.com/sp1ritCS/meson "$RUNNER_TEMP/meson"
           git clone --depth 1 https://github.com/sp1ritCS/gtk-android-builder "$RUNNER_TEMP/pw"
+          # Recent GTK's Android backend uses API-34 keycodes (AKEYCODE_KEYBOARD_BACKLIGHT_*);
+          # Pixiewood pins the NDK clang target to API 31. Bump it to 34.
+          sed -i "s/+'31-clang/+'34-clang/g" "$RUNNER_TEMP/pw/prepare/android.cross"
           # Pixiewood needs the FORKED meson everywhere (only it understands
           # android_exe_type), both via --meson and as plain `meson` on PATH.
           printf '#!/bin/sh\nexec python3 "%s/meson.py" "$@"\n' "$RUNNER_TEMP/meson" \
