@@ -21,10 +21,25 @@ namespace TgWsProxy {
         Engine? engine = null;
         string last_error = "";
         uint poll_id = 0;
+        FileStream? logfp = null;
         GenericArray<Engine> retired = new GenericArray<Engine> ();
 
         construct {
             cfg = Config.load ();
+            setup_logging ();
+        }
+
+        // No daemon to capture the engine's GLib log output on Android, so route
+        // it to the same proxy.log the LogView tails (mirrors Daemon.setup_logging).
+        void setup_logging () {
+            if (!cfg.log_to_file) return;
+            Paths.ensure_dir ();
+            logfp = FileStream.open (Paths.log_file (), "a");
+            Log.set_default_handler ((domain, level, msg) => {
+                var ts = new DateTime.now_local ().format ("%H:%M:%S");
+                var line = "%s  %s\n".printf (ts, msg);
+                if (logfp != null) { logfp.puts (line); logfp.flush (); }
+            });
         }
 
         public bool running { get { return engine != null; } }
