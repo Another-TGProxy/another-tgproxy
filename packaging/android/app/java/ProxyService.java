@@ -41,15 +41,23 @@ public class ProxyService extends Service {
 		Notification n = b
 				.setContentTitle("Another TGProxy")
 				.setContentText("Proxy running in the background")
-				.setSmallIcon(getApplicationInfo().icon)
+				// A simple monochrome vector (the adaptive-icon foreground) — a
+				// full colour/adaptive icon is not a valid notification small icon.
+				.setSmallIcon(R.drawable.ic_launcher_foreground)
 				.setContentIntent(pi)
 				.setOngoing(true)
 				.build();
 
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-			startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-		else
-			startForeground(NOTIFICATION_ID, n);
+		try {
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+				startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+			else
+				startForeground(NOTIFICATION_ID, n);
+		} catch (Exception e) {
+			// Don't take the process down if promotion is refused; fall back to a
+			// plain service rather than crashing the whole app.
+			stopSelf();
+		}
 	}
 
 	@Override
@@ -60,6 +68,13 @@ public class ProxyService extends Service {
 	@Override
 	public IBinder onBind(Intent intent) {
 		return null;
+	}
+
+	// specialUse has no enforced time limit, but honour a timeout if one ever
+	// fires rather than risking an ANR.
+	@Override
+	public void onTimeout(int startId) {
+		stopSelf();
 	}
 
 	// Swiping the app away from recents tears down the process; don't keep a
