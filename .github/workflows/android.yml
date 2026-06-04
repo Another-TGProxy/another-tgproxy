@@ -53,7 +53,7 @@ jobs:
 
       - name: Forked meson (android branch) + Pixiewood
         run: |
-          git clone --depth 1 -b android https://github.com/sp1ritCS/meson "$RUNNER_TEMP/meson"
+          git clone --depth 1 -b android-apk https://github.com/sp1ritCS/meson "$RUNNER_TEMP/meson"
           git clone --depth 1 https://github.com/sp1ritCS/gtk-android-builder "$RUNNER_TEMP/pw"
           # Pixiewood needs the FORKED meson everywhere (only it understands
           # android_exe_type), both via --meson and as plain `meson` on PATH.
