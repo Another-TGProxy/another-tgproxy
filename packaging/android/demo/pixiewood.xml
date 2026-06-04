@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<app xmlns="https://sp1rit.arpa/pixiewood/" xmlns:xi="http://www.w3.org/2001/XInclude">
+	<metainfo vercalc="count">
+		<xi:include href="build://aarch64/share/metainfo/space.ampernic.AdwDemo.metainfo.xml" parse="xml"/>
+	</metainfo>
+	<style>
+		<theme name="adw"/>
+		<icon type="generate">
+			<drawable target="foreground" scale=".6" type="svg" path="src://icon.svg"/>
+			<color target="background">#241f31</color>
+			<drawable target="monochrome" scale=".6" type="svg" path="src://icon-symbolic.svg"/>
+		</icon>
+	</style>
+	<dependencies>
+		<glib>
+			<patch>hack</patch>
+		</glib>
+		<fontconfig/>
+		<gtk/>
+		<libadwaita/>
+	</dependencies>
+	<build target="adwdemo">
+		<architectures>
+			<arch>aarch64</arch>
+		</architectures>
+	</build>
+</app>

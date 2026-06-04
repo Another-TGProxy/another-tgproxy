@@ -1,0 +1,83 @@
+name: Android (experimental)
+
+# Validates the GTK-on-Android (Pixiewood) pipeline on a runner: it has the disk
+# and lets us install the full toolchain. Stage 1 builds a minimal GTK4/libadwaita
+# demo APK; once that is green the real (ported) app reuses the same pipeline.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'packaging/android/**'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  demo-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/lib/android/sdk/ndk || true
+          df -h /
+
+      - name: Host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ninja-build sassc glslc libxml2-utils \
+            libglib2.0-dev-bin gobject-introspection python3 \
+            libglib-perl libglib-object-introspection-perl libipc-run-perl \
+            libjson-perl libset-scalar-perl libxml-libxml-perl libxml-libxslt-perl \
+            gir1.2-appstream-1.0 openjdk-17-jdk-headless
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK + platform + build-tools
+        run: |
+          yes | sdkmanager --install \
+            "platform-tools" "platforms;android-34" "build-tools;34.0.0" \
+            "ndk;26.3.11579264" "cmake;3.22.1" >/dev/null
+          ls "$ANDROID_HOME/ndk"
+
+      - name: Forked meson (android branch) + Pixiewood
+        run: |
+          git clone --depth 1 -b android https://github.com/sp1ritCS/meson "$RUNNER_TEMP/meson"
+          git clone --depth 1 https://github.com/sp1ritCS/gtk-android-builder "$RUNNER_TEMP/pw"
+
+      - name: Build demo APK (Pixiewood)
+        working-directory: packaging/android/demo
+        run: |
+          set -x
+          PW="$RUNNER_TEMP/pw/pixiewood"
+          MESON="$RUNNER_TEMP/meson/meson.py"
+          perl "$PW" prepare pixiewood.xml \
+            --sdk "$ANDROID_HOME" \
+            --android-studio-dir "$ANDROID_HOME" \
+            --meson "$MESON" -v
+          perl "$PW" generate -v
+          perl "$PW" build -v
+
+      - name: Collect APKs
+        if: always()
+        run: |
+          find packaging/android/demo -name '*.apk' -print
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adwdemo-apk
+          path: packaging/android/demo/**/*.apk
+          if-no-files-found: warn

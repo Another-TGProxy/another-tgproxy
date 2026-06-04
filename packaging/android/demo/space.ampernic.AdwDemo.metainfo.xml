@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application" xmlns="https://specifications.freedesktop.org/metainfo/1.0">
+  <id>space.ampernic.AdwDemo</id>
+  <name>Adwaita Demo</name>
+  <summary>GTK4 and libadwaita on Android</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>A minimal GTK4/libadwaita app used to validate the Pixiewood Android build pipeline.</p>
+  </description>
+  <launchable type="desktop-id">space.ampernic.AdwDemo.desktop</launchable>
+  <releases>
+    <release version="1.0.0" date="2026-06-04"/>
+  </releases>
+</component>
