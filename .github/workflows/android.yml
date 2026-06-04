@@ -31,6 +31,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential ninja-build sassc glslc libxml2-utils \
             libglib2.0-dev-bin gobject-introspection python3 \
+            valac libgtk-4-dev libadwaita-1-dev \
             libglib-perl libglib-object-introspection-perl libipc-run-perl \
             libjson-perl libset-scalar-perl libxml-libxml-perl libxml-libxslt-perl \
             gir1.2-appstream-1.0 openjdk-17-jdk-headless
@@ -66,7 +67,7 @@ jobs:
           meson --version
 
       - name: Build demo APK (Pixiewood)
-        working-directory: packaging/android/demo
+        working-directory: packaging/android/vala-demo
         run: |
           set -x
           PW="$RUNNER_TEMP/pw/pixiewood"
@@ -81,7 +82,7 @@ jobs:
         if: always()
         run: |
           mkdir -p "$GITHUB_WORKSPACE/android-apks"
-          find packaging/android/demo -name '*.apk' -exec cp -v {} "$GITHUB_WORKSPACE/android-apks/" \;
+          find packaging/android/vala-demo -name '*.apk' -exec cp -v {} "$GITHUB_WORKSPACE/android-apks/" \;
           ls -la "$GITHUB_WORKSPACE/android-apks/" || true
 
       - name: Upload APK
