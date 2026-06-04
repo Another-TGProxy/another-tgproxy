@@ -80,12 +80,14 @@ jobs:
       - name: Collect APKs
         if: always()
         run: |
-          find packaging/android/demo -name '*.apk' -print
+          mkdir -p "$GITHUB_WORKSPACE/android-apks"
+          find packaging/android/demo -name '*.apk' -exec cp -v {} "$GITHUB_WORKSPACE/android-apks/" \;
+          ls -la "$GITHUB_WORKSPACE/android-apks/" || true
 
       - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: adwdemo-apk
-          path: packaging/android/demo/**/*.apk
+          path: android-apks/*.apk
           if-no-files-found: warn
