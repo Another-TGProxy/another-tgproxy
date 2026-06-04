@@ -141,6 +141,13 @@ jobs:
             --android-studio-dir "$ANDROID_HOME" \
             --meson /usr/local/bin/meson -v
           perl "$PW" generate -v
+          # Add the foreground service (keeps the proxy alive when backgrounded):
+          # the Java sources, plus a manifest-merger overlay in the debug build-type
+          # source set that gradle merges with Pixiewood's generated manifest.
+          APP=.pixiewood/android/app
+          mkdir -p "$APP/src/main/java/space/ampernic/anothertgproxy" "$APP/src/debug"
+          cp packaging/android/app/java/*.java "$APP/src/main/java/space/ampernic/anothertgproxy/"
+          cp packaging/android/app/AndroidManifest-overlay.xml "$APP/src/debug/AndroidManifest.xml"
           perl "$PW" build
 
       - name: Collect APKs
