@@ -24,7 +24,9 @@ namespace TgWsProxy {
 
             start_btn.clicked.connect (() => service.start ());
             stop_btn.clicked.connect (() => { client.send ("stop"); service.stop (); });
-            restart_btn.clicked.connect (() => service.restart ());
+            // Restart the engine in-process via the daemon's control channel: no
+            // process churn, no port race, and works without session D-Bus (macOS).
+            restart_btn.clicked.connect (() => client.send ("reload"));
             open_btn.clicked.connect (open_in_telegram);
             copy_btn.clicked.connect (() => {
                 if (current_link == "") return;
