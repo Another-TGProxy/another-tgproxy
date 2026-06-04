@@ -6,9 +6,8 @@
 	<style>
 		<theme name="adw"/>
 		<icon type="generate">
-			<drawable target="foreground" scale=".6" type="svg" path="src://icon.svg"/>
+			<drawable target="foreground" type="avd" path="src://foreground.xml"/>
 			<color target="background">#241f31</color>
-			<drawable target="monochrome" scale=".6" type="svg" path="src://icon-symbolic.svg"/>
 		</icon>
 	</style>
 	<dependencies>
