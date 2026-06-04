@@ -3,7 +3,8 @@
 # Expects core (mtproxy-ws) sources under $CORE_SRC (default ../_core) and runs
 # from the gui repo root. Homebrew provides gtk4/libadwaita/vala/etc.
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+SELF="$(cd "$(dirname "$0")" && pwd)"   # packaging/macos (holds Info.plist.in, launcher)
+cd "$SELF/../.."                        # gui repo root
 
 BREW="$(brew --prefix)"
 CORE_SRC="${CORE_SRC:-_core}"
@@ -162,47 +163,13 @@ done
 iconutil -c icns "$ICONSET" -o "$RES/$BIN.icns"
 rm -rf "$ICONSET"
 
-# -- 7. Info.plist -------------------------------------------------------------
+# -- 7. Info.plist (from template) + launcher (static) -------------------------
 APP_VERSION="$(awk -F\' '/version:/{print $2; exit}' meson.build)"
-cat > "$CONTENTS/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>CFBundleName</key><string>$APP_NAME</string>
-  <key>CFBundleDisplayName</key><string>$APP_NAME</string>
-  <key>CFBundleIdentifier</key><string>$APP_ID</string>
-  <key>CFBundleVersion</key><string>$APP_VERSION</string>
-  <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
-  <key>CFBundleExecutable</key><string>launcher</string>
-  <key>CFBundleIconFile</key><string>$BIN.icns</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>LSMinimumSystemVersion</key><string>12.0</string>
-  <key>NSHighResolutionCapable</key><true/>
-</dict></plist>
-PLIST
+sed -e "s|@APP_NAME@|$APP_NAME|g" -e "s|@APP_ID@|$APP_ID|g" \
+    -e "s|@VERSION@|$APP_VERSION|g" -e "s|@BIN@|$BIN|g" \
+    "$SELF/Info.plist.in" > "$CONTENTS/Info.plist"
 
-# -- 8. launcher: set GTK runtime env, then exec the real binary ---------------
-cat > "$MACOS/launcher" <<'LAUNCH'
-#!/bin/sh
-DIR="$(cd "$(dirname "$0")" && pwd)"
-RES="$DIR/../Resources"
-export XDG_DATA_DIRS="$RES/share:$RES"
-export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
-export GSETTINGS_SCHEMA_DIR="$RES/glib-2.0/schemas"
-export GIO_MODULE_DIR="$RES/lib/gio/modules"
-# Materialise the loader cache (turn @RES@ into the real path) into a WRITABLE dir:
-# the .app may live on a read-only DMG or in /Applications, so we can't write inside it.
-CACHE_DIR="${XDG_CACHE_HOME:-$HOME/Library/Caches}/space.ampernic.AnotherTGProxy"
-mkdir -p "$CACHE_DIR"
-sed "s|@RES@|$RES|g" "$RES/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache" > "$CACHE_DIR/loaders.cache"
-export GDK_PIXBUF_MODULE_FILE="$CACHE_DIR/loaders.cache"
-export XDG_DATA_DIRS="$RES:$RES/share"
-# so the GUI can re-spawn itself as the background daemon (no /proc on macOS)
-export ANOTHER_TGPROXY_EXE="$DIR/another-tgproxy"
-export ANOTHER_TGPROXY_TRAY_ICON="$RES/tray-icon.png"
-exec "$DIR/another-tgproxy" "$@"
-LAUNCH
-chmod +x "$MACOS/launcher"
+install -m 0755 "$SELF/launcher" "$MACOS/launcher"
 
 # -- 9. DMG --------------------------------------------------------------------
 info "Creating DMG..."
