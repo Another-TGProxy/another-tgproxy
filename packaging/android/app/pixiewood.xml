@@ -23,6 +23,12 @@
 		<libadwaita/>
 	</dependencies>
 	<build target="another-tgproxy">
+		<configure-options>
+			<!-- json-glib otherwise pulls the gobject-introspection subproject,
+			     which needs a (cross-unusable) Python.h. We don't need GIR. -->
+			<option>-Djson-glib:introspection=disabled</option>
+			<option>-Djson-glib:tests=false</option>
+		</configure-options>
 		<architectures>
 			<arch>aarch64</arch>
 		</architectures>
