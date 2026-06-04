@@ -55,17 +55,22 @@ jobs:
         run: |
           git clone --depth 1 -b android https://github.com/sp1ritCS/meson "$RUNNER_TEMP/meson"
           git clone --depth 1 https://github.com/sp1ritCS/gtk-android-builder "$RUNNER_TEMP/pw"
+          # Pixiewood needs the FORKED meson everywhere (only it understands
+          # android_exe_type), both via --meson and as plain `meson` on PATH.
+          printf '#!/bin/sh\nexec python3 "%s/meson.py" "$@"\n' "$RUNNER_TEMP/meson" \
+            | sudo tee /usr/local/bin/meson >/dev/null
+          sudo chmod +x /usr/local/bin/meson
+          meson --version
 
       - name: Build demo APK (Pixiewood)
         working-directory: packaging/android/demo
         run: |
           set -x
           PW="$RUNNER_TEMP/pw/pixiewood"
-          MESON="$RUNNER_TEMP/meson/meson.py"
           perl "$PW" prepare pixiewood.xml \
             --sdk "$ANDROID_HOME" \
             --android-studio-dir "$ANDROID_HOME" \
-            --meson "$MESON" -v
+            --meson /usr/local/bin/meson -v
           perl "$PW" generate -v
           perl "$PW" build -v
 
