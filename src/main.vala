@@ -7,6 +7,13 @@ int main (string[] args) {
     var appdir = Environment.get_variable ("APPDIR");
     if (appdir != null && appdir != "")
         localedir = appdir + "/usr/share/locale";
+#if ANDROID
+    // The catalogs ship under the extracted assets, which gdk-android exposes as
+    // XDG_DATA_DIRS (<filesDir>/share); the baked-in absolute LOCALEDIR is wrong.
+    var data_dirs = Environment.get_system_data_dirs ();
+    if (data_dirs.length > 0)
+        localedir = Path.build_filename (data_dirs[0], "locale");
+#endif
     Intl.bindtextdomain (Build.GETTEXT_PACKAGE, localedir);
     Intl.bind_textdomain_codeset (Build.GETTEXT_PACKAGE, "UTF-8");
     Intl.textdomain (Build.GETTEXT_PACKAGE);

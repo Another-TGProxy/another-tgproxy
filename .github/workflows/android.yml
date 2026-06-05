@@ -123,6 +123,9 @@ jobs:
           # Recent GTK's Android backend uses API-35 keycodes; Pixiewood pins the
           # NDK clang target to API 31. Bump it to 35.
           sed -i "s/+'31-clang/+'${ANDROID_API}-clang/g" "$RUNNER_TEMP/pw/prepare/android.cross"
+          # Pixiewood installs only --tags runtime; meson tags .mo catalogs 'i18n',
+          # so translations would be dropped. Include them.
+          sed -i 's/"--tags", "runtime")/"--tags", "runtime,i18n")/' "$RUNNER_TEMP/pw/pixiewood"
           # Pixiewood needs the FORKED meson everywhere (only it understands
           # android_exe_type), both via --meson and as plain `meson` on PATH.
           printf '#!/bin/sh\nexec python3 "%s/meson.py" "$@"\n' "$RUNNER_TEMP/meson" \

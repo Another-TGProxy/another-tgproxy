@@ -8,6 +8,8 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 
+import java.util.Locale;
+
 import org.gtk.android.RuntimeApplication;
 
 // Replaces org.gtk.android.RuntimeApplication as the manifest <application> so we
@@ -25,6 +27,19 @@ public class ProxyApplication extends RuntimeApplication {
 
 	@Override
 	public void onCreate() {
+		// Bionic sets no locale env, so GLib's gettext (proxy-libintl) sees "C"
+		// and never translates. Export the system language into the process env
+		// before super.onCreate() starts the native runtime, so getenv("LANGUAGE")
+		// resolves on the GTK side.
+		String lang = Locale.getDefault().getLanguage();
+		if (lang != null && !lang.isEmpty()) {
+			try {
+				android.system.Os.setenv("LANGUAGE", lang, true);
+			} catch (Exception e) {
+				// non-fatal: app stays in English
+			}
+		}
+
 		super.onCreate();
 		registerActivityLifecycleCallbacks(new LifecycleHook());
 	}
