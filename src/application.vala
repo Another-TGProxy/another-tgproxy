@@ -36,7 +36,43 @@ namespace TgWsProxy {
                 win = new Window (this);
             }
             win.present ();
+#if ANDROID
+            maybe_prompt_battery (win);
+#endif
         }
+
+#if ANDROID
+        bool battery_prompted = false;
+
+        // A foreground service alone doesn't survive Doze / App Standby; nudge the
+        // user to exempt the app from battery optimization. Shown as a normal Adw
+        // dialog; "Open settings" jumps straight to the per-app confirmation via
+        // the gdk-android bridge. Wait for the surface so the bridge has a toplevel.
+        void maybe_prompt_battery (Gtk.Window win) {
+            if (battery_prompted) return;
+            ulong id = 0;
+            id = win.map.connect (() => {
+                win.disconnect (id);
+                var surface = win.get_surface ();
+                if (surface == null || battery_prompted) return;
+                if (TgwsAndroid.is_ignoring_battery_optimizations (surface)) return;
+                battery_prompted = true;
+
+                var dialog = new Adw.AlertDialog (
+                    _("Background operation"),
+                    _("To keep the proxy running in the background, disable battery optimization for this app. Otherwise Android may stop it after a while."));
+                dialog.add_response ("later", _("Later"));
+                dialog.add_response ("settings", _("Open settings"));
+                dialog.set_response_appearance ("settings", Adw.ResponseAppearance.SUGGESTED);
+                dialog.set_default_response ("settings");
+                dialog.response.connect ((resp) => {
+                    if (resp == "settings")
+                        TgwsAndroid.request_ignore_battery_optimizations (surface);
+                });
+                dialog.present (win);
+            });
+        }
+#endif
 
 #if DARWIN
         void setup_mac_tray () {

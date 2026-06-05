@@ -127,8 +127,9 @@ if host_machine.system() != 'android'
   )
 endif
 
-# Platform-specific extras (macOS menu-bar tray via NSStatusItem).
+# Platform-specific extras (macOS menu-bar tray via NSStatusItem; Android JNI glue).
 mac_sources = []
+android_sources = []
 extra_deps = []
 inc_dirs = ['.']
 if host_machine.system() == 'darwin'
@@ -136,6 +137,10 @@ if host_machine.system() == 'darwin'
   mac_sources = files('src/mac/mac_tray.m', 'src/mac/mac_tray.vapi')
   extra_deps += dependency('appleframeworks', modules: ['Cocoa'])
   inc_dirs += 'src/mac'
+elif host_machine.system() == 'android'
+  # C glue over the gdk-android public API (battery-optimization exemption, …).
+  android_sources = files('src/android/android_bridge.c', 'src/android/android_bridge.vapi')
+  inc_dirs += 'src/android'
 endif
 
 # android_exe_type is a Pixiewood meson-fork kwarg; only pass it when targeting
@@ -146,7 +151,7 @@ if host_machine.system() == 'android'
 endif
 
 executable('another-tgproxy',
-  sources, mac_sources, config_h, resources,
+  sources, mac_sources, android_sources, config_h, resources,
   dependencies: deps + extra_deps,
   vala_args: vala_extra,
   c_args: ['-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name())],

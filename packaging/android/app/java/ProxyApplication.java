@@ -2,17 +2,11 @@
 package space.ampernic.anothertgproxy;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Application;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.PowerManager;
-import android.provider.Settings;
-
-import java.util.Locale;
 
 import org.gtk.android.RuntimeApplication;
 
@@ -23,12 +17,11 @@ import org.gtk.android.RuntimeApplication;
 // yet, so the app is not "foreground" by the FGS rules and startForegroundService
 // throws ForegroundServiceStartNotAllowedException (Android 12+). Instead we wait
 // for the first resumed activity — then the start is allowed and the main thread
-// is free, so the service promotes itself within the timeout. We also request the
-// notification permission and nudge the user to exempt us from battery
-// optimization (a foreground service alone doesn't survive Doze / App Standby).
+// is free, so the service promotes itself within the timeout. The notification
+// permission is requested here too. The battery-optimization nudge lives in the
+// GTK UI (Adw dialog via the gdk-android bridge), not here.
 public class ProxyApplication extends RuntimeApplication {
 	private boolean serviceStarted = false;
-	private boolean batteryPrompted = false;
 
 	@Override
 	public void onCreate() {
@@ -44,66 +37,14 @@ public class ProxyApplication extends RuntimeApplication {
 					new String[] {"android.permission.POST_NOTIFICATIONS"}, 1001);
 		}
 
-		if (!serviceStarted) {
-			serviceStarted = true;
-			Intent svc = new Intent(this, ProxyService.class);
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-				startForegroundService(svc);
-			else
-				startService(svc);
-		}
-
-		maybePromptBatteryOptimization(activity);
-	}
-
-	// A foreground service keeps the process alive against memory pressure, but
-	// aggressive battery management (Doze / App Standby) still freezes it after a
-	// while. Only a battery-optimization exemption prevents that, and it needs the
-	// user's consent. Nudge once per launch until it's granted.
-	private void maybePromptBatteryOptimization(Activity activity) {
-		if (batteryPrompted)
+		if (serviceStarted)
 			return;
-		PowerManager pm = getSystemService(PowerManager.class);
-		if (pm == null || pm.isIgnoringBatteryOptimizations(getPackageName()))
-			return;
-		batteryPrompted = true;
-
-		boolean ru = Locale.getDefault().getLanguage().equals("ru");
-		String title = ru ? "Работа в фоне" : "Background operation";
-		String message = ru
-				? "Чтобы прокси не отключался в фоне, отключите оптимизацию "
-						+ "батареи для этого приложения. Иначе Android может "
-						+ "останавливать его через какое-то время."
-				: "To keep the proxy running in the background, disable battery "
-						+ "optimization for this app. Otherwise Android may stop "
-						+ "it after a while.";
-		String open = ru ? "Открыть настройки" : "Open settings";
-		String later = ru ? "Позже" : "Later";
-
-		new AlertDialog.Builder(activity)
-				.setTitle(title)
-				.setMessage(message)
-				.setCancelable(true)
-				.setPositiveButton(open, (dialog, which) -> openBatterySettings(activity))
-				.setNegativeButton(later, (dialog, which) -> dialog.dismiss())
-				.show();
-	}
-
-	private void openBatterySettings(Activity activity) {
-		// Goes straight to the per-app "allow / don't optimize" confirmation.
-		try {
-			Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-					Uri.parse("package:" + getPackageName()));
-			activity.startActivity(i);
-		} catch (Exception e) {
-			// Fall back to the general battery-optimization list if the targeted
-			// action is unavailable on this ROM.
-			try {
-				activity.startActivity(new Intent(
-						Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
-			} catch (Exception ignored) {
-			}
-		}
+		serviceStarted = true;
+		Intent svc = new Intent(this, ProxyService.class);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+			startForegroundService(svc);
+		else
+			startService(svc);
 	}
 
 	private final class LifecycleHook implements Application.ActivityLifecycleCallbacks {
