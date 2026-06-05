@@ -7,6 +7,10 @@ namespace TgwsAndroid {
     public void request_ignore_battery_optimizations (Gdk.Surface surface);
     [CCode (cname = "tgws_android_bind_notification")]
     public void bind_notification (Gdk.Surface surface);
+    [CCode (cname = "TgwsAndroidResumeFunc", has_target = false)]
+    public delegate void ResumeFunc ();
+    [CCode (cname = "tgws_android_set_resume_handler")]
+    public void set_resume_handler (ResumeFunc cb);
     [CCode (cname = "tgws_android_set_notification_text")]
     public void set_notification_text (string text);
     [CCode (cname = "tgws_android_open_notification_settings")]

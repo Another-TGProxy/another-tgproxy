@@ -42,28 +42,42 @@ namespace TgWsProxy {
         }
 
 #if ANDROID
+        static unowned Application? android_self = null;
         bool android_wired = false;
         bool battery_dialog_open = false;
 
-        // gdk-android unmaps the surface when the app is backgrounded and remaps it
-        // when it returns, so Gtk.Widget::map fires on every foreground — the clean
-        // "app opened / came back" signal. (is-active is focus: it needs a tap and
-        // doesn't change on resume, which is why the prompt only showed after a
-        // fresh start and a click.) The surface is a realized Android toplevel by
-        // map, which the bridge needs.
+        // "App opened / came back to the foreground" is an Android Activity
+        // lifecycle event (onResume), not a GTK one: a quick home→reopen keeps the
+        // surface mapped (only a relayout), so Gtk's map fires solely on the first
+        // launch. So we drive the recurring check from ProxyApplication's
+        // onActivityResumed via the bridge, and use the first map only to bind the
+        // bridge (it needs a realized surface) and prompt on that initial launch.
         void wire_android (Gtk.Window win) {
             if (android_wired) return;
             android_wired = true;
+            android_self = this;
+            TgwsAndroid.set_resume_handler (android_resume);
             win.map.connect (() => {
                 var surface = win.get_surface ();
                 if (surface == null) return;
-                // Cache the ProxyService class via the app class loader while we
-                // have a surface, so the engine can later update the notification.
                 TgwsAndroid.bind_notification (surface);
-                if (battery_dialog_open) return;
-                if (TgwsAndroid.is_ignoring_battery_optimizations (surface)) return;
-                show_battery_dialog (win, surface);
+                check_battery (win);
             });
+        }
+
+        // Invoked on the GTK main thread on every activity resume.
+        static void android_resume () {
+            if (android_self == null) return;
+            var win = android_self.active_window;
+            if (win != null) android_self.check_battery (win);
+        }
+
+        void check_battery (Gtk.Window win) {
+            if (battery_dialog_open) return;
+            var surface = win.get_surface ();
+            if (surface == null) return;
+            if (TgwsAndroid.is_ignoring_battery_optimizations (surface)) return;
+            show_battery_dialog (win, surface);
         }
 
         void show_battery_dialog (Gtk.Window win, Gdk.Surface surface) {

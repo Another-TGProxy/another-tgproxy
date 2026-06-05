@@ -44,6 +44,12 @@ public class ProxyApplication extends RuntimeApplication {
 		registerActivityLifecycleCallbacks(new LifecycleHook());
 	}
 
+	// Implemented in the GTK app's native bridge (registered once a surface
+	// exists). Fired on every resume so the UI can re-check things like the
+	// battery-optimization exemption. Until it's registered (the very first
+	// resume) it throws UnsatisfiedLinkError, which we ignore.
+	private static native void nativeOnResume();
+
 	private void onForeground(Activity activity) {
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 				&& checkSelfPermission("android.permission.POST_NOTIFICATIONS")
@@ -52,14 +58,20 @@ public class ProxyApplication extends RuntimeApplication {
 					new String[] {"android.permission.POST_NOTIFICATIONS"}, 1001);
 		}
 
-		if (serviceStarted)
-			return;
-		serviceStarted = true;
-		Intent svc = new Intent(this, ProxyService.class);
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-			startForegroundService(svc);
-		else
-			startService(svc);
+		if (!serviceStarted) {
+			serviceStarted = true;
+			Intent svc = new Intent(this, ProxyService.class);
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+				startForegroundService(svc);
+			else
+				startService(svc);
+		}
+
+		try {
+			nativeOnResume();
+		} catch (UnsatisfiedLinkError e) {
+			// not registered yet (first resume, before the surface maps)
+		}
 	}
 
 	private final class LifecycleHook implements Application.ActivityLifecycleCallbacks {

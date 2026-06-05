@@ -7,6 +7,66 @@
 /* ProxyService class, loaded via the app class loader (see bind_notification). */
 static jclass g_service_cls = NULL;
 
+/* Resume handler set by the UI; invoked on the GTK main thread on each resume. */
+static TgwsAndroidResumeFunc g_resume_cb = NULL;
+
+static gboolean
+resume_on_main (gpointer data)
+{
+  (void) data;
+  if (g_resume_cb != NULL)
+    g_resume_cb ();
+  return G_SOURCE_REMOVE;
+}
+
+/* JNI: ProxyApplication.nativeOnResume(). Runs on the Android UI thread, so it
+ * just hands off to the GTK main loop. */
+static void
+native_on_resume (JNIEnv *env, jclass cls)
+{
+  (void) env;
+  (void) cls;
+  g_idle_add (resume_on_main, NULL);
+}
+
+void
+tgws_android_set_resume_handler (TgwsAndroidResumeFunc cb)
+{
+  g_resume_cb = cb;
+}
+
+/* Load an app class through the activity's class loader (the system loader a
+ * native thread would use can't see app classes). Returns a global ref or NULL. */
+static jclass
+load_app_class (JNIEnv *env, jobject activity, const char *dotted_name)
+{
+  jclass acls = (*env)->GetObjectClass (env, activity);
+  jmethodID get_cl = (*env)->GetMethodID (env, acls, "getClassLoader",
+                                          "()Ljava/lang/ClassLoader;");
+  jobject cl = (*env)->CallObjectMethod (env, activity, get_cl);
+  (*env)->DeleteLocalRef (env, acls);
+  if (cl == NULL)
+    return NULL;
+  jclass cl_cls = (*env)->GetObjectClass (env, cl);
+  jmethodID load = (*env)->GetMethodID (env, cl_cls, "loadClass",
+                                        "(Ljava/lang/String;)Ljava/lang/Class;");
+  (*env)->DeleteLocalRef (env, cl_cls);
+  jstring name = (*env)->NewStringUTF (env, dotted_name);
+  jobject cls = (*env)->CallObjectMethod (env, cl, load, name);
+  (*env)->DeleteLocalRef (env, name);
+  (*env)->DeleteLocalRef (env, cl);
+  if ((*env)->ExceptionCheck (env))
+    {
+      (*env)->ExceptionClear (env);
+      return NULL;
+    }
+  if (cls == NULL)
+    return NULL;
+  jclass global = (*env)->NewGlobalRef (env, cls);
+  (*env)->DeleteLocalRef (env, cls);
+  return global;
+}
+
 /* Resolve the JNI environment and the current Activity (which is a Context) from
  * a realized toplevel surface. Returns FALSE if the surface isn't an Android
  * toplevel yet. */
@@ -130,34 +190,22 @@ tgws_android_bind_notification (GdkSurface *surface)
   if (!resolve (surface, &env, &activity, &toplevel))
     return;
 
-  /* ClassLoader cl = activity.getClass().getClassLoader();
-   * Class svc = cl.loadClass("space.ampernic.anothertgproxy.ProxyService"); */
-  jclass acls = (*env)->GetObjectClass (env, activity);
-  jmethodID get_cl = (*env)->GetMethodID (env, acls, "getClassLoader",
-                                          "()Ljava/lang/ClassLoader;");
-  jobject cl = (*env)->CallObjectMethod (env, activity, get_cl);
-  (*env)->DeleteLocalRef (env, acls);
-  if (cl == NULL)
-    return;
+  g_service_cls = load_app_class (env, activity, "space.ampernic.anothertgproxy.ProxyService");
+  if (g_service_cls == NULL)
+    g_warning ("android bridge: could not load ProxyService class");
 
-  jclass cl_cls = (*env)->GetObjectClass (env, cl);
-  jmethodID load = (*env)->GetMethodID (env, cl_cls, "loadClass",
-                                        "(Ljava/lang/String;)Ljava/lang/Class;");
-  (*env)->DeleteLocalRef (env, cl_cls);
-  jstring name = (*env)->NewStringUTF (env, "space.ampernic.anothertgproxy.ProxyService");
-  jobject svc = (*env)->CallObjectMethod (env, cl, load, name);
-  (*env)->DeleteLocalRef (env, name);
-  (*env)->DeleteLocalRef (env, cl);
-  if ((*env)->ExceptionCheck (env))
+  /* Bind ProxyApplication.nativeOnResume → native_on_resume. The lib is opened
+   * with dlopen, so the JVM can't resolve native methods by name; register it. */
+  jclass app_cls = load_app_class (env, activity, "space.ampernic.anothertgproxy.ProxyApplication");
+  if (app_cls != NULL)
     {
-      (*env)->ExceptionClear (env);
-      g_warning ("android bridge: could not load ProxyService class");
-      return;
-    }
-  if (svc != NULL)
-    {
-      g_service_cls = (*env)->NewGlobalRef (env, svc);
-      (*env)->DeleteLocalRef (env, svc);
+      JNINativeMethod m = { "nativeOnResume", "()V", (void *) native_on_resume };
+      if ((*env)->RegisterNatives (env, app_cls, &m, 1) != 0)
+        {
+          (*env)->ExceptionClear (env);
+          g_warning ("android bridge: could not register nativeOnResume");
+        }
+      (*env)->DeleteGlobalRef (env, app_cls);
     }
 }
 
