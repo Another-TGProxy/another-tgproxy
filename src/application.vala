@@ -35,25 +35,26 @@ namespace TgWsProxy {
             if (win == null) {
                 win = new Window (this);
             }
-            win.present ();
 #if ANDROID
-            wire_battery_prompt (win);
+            wire_android (win);   // before present() so we catch the first map
 #endif
+            win.present ();
         }
 
 #if ANDROID
-        bool battery_wired = false;
+        bool android_wired = false;
         bool battery_dialog_open = false;
 
-        // A foreground service alone doesn't survive Doze / App Standby; nudge the
-        // user to exempt the app from battery optimization. Checked every time the
-        // window comes to the foreground (so it keeps asking until granted); by then
-        // the surface is a realized Android toplevel, which the bridge needs.
-        void wire_battery_prompt (Gtk.Window win) {
-            if (battery_wired) return;
-            battery_wired = true;
-            win.notify["is-active"].connect (() => {
-                if (!win.is_active) return;
+        // gdk-android unmaps the surface when the app is backgrounded and remaps it
+        // when it returns, so Gtk.Widget::map fires on every foreground — the clean
+        // "app opened / came back" signal. (is-active is focus: it needs a tap and
+        // doesn't change on resume, which is why the prompt only showed after a
+        // fresh start and a click.) The surface is a realized Android toplevel by
+        // map, which the bridge needs.
+        void wire_android (Gtk.Window win) {
+            if (android_wired) return;
+            android_wired = true;
+            win.map.connect (() => {
                 var surface = win.get_surface ();
                 if (surface == null) return;
                 // Cache the ProxyService class via the app class loader while we
