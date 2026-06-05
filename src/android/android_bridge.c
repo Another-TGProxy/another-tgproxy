@@ -4,6 +4,9 @@
 #include <jni.h>
 #include <gdk/android/gdkandroid.h>
 
+/* ProxyService class, loaded via the app class loader (see bind_notification). */
+static jclass g_service_cls = NULL;
+
 /* Resolve the JNI environment and the current Activity (which is a Context) from
  * a realized toplevel surface. Returns FALSE if the surface isn't an Android
  * toplevel yet. */
@@ -117,11 +120,55 @@ tgws_android_request_ignore_battery_optimizations (GdkSurface *surface)
 }
 
 void
+tgws_android_bind_notification (GdkSurface *surface)
+{
+  if (g_service_cls != NULL)
+    return;
+  JNIEnv *env;
+  jobject activity;
+  GdkAndroidToplevel *toplevel;
+  if (!resolve (surface, &env, &activity, &toplevel))
+    return;
+
+  /* ClassLoader cl = activity.getClass().getClassLoader();
+   * Class svc = cl.loadClass("space.ampernic.anothertgproxy.ProxyService"); */
+  jclass acls = (*env)->GetObjectClass (env, activity);
+  jmethodID get_cl = (*env)->GetMethodID (env, acls, "getClassLoader",
+                                          "()Ljava/lang/ClassLoader;");
+  jobject cl = (*env)->CallObjectMethod (env, activity, get_cl);
+  (*env)->DeleteLocalRef (env, acls);
+  if (cl == NULL)
+    return;
+
+  jclass cl_cls = (*env)->GetObjectClass (env, cl);
+  jmethodID load = (*env)->GetMethodID (env, cl_cls, "loadClass",
+                                        "(Ljava/lang/String;)Ljava/lang/Class;");
+  (*env)->DeleteLocalRef (env, cl_cls);
+  jstring name = (*env)->NewStringUTF (env, "space.ampernic.anothertgproxy.ProxyService");
+  jobject svc = (*env)->CallObjectMethod (env, cl, load, name);
+  (*env)->DeleteLocalRef (env, name);
+  (*env)->DeleteLocalRef (env, cl);
+  if ((*env)->ExceptionCheck (env))
+    {
+      (*env)->ExceptionClear (env);
+      g_warning ("android bridge: could not load ProxyService class");
+      return;
+    }
+  if (svc != NULL)
+    {
+      g_service_cls = (*env)->NewGlobalRef (env, svc);
+      (*env)->DeleteLocalRef (env, svc);
+    }
+}
+
+void
 tgws_android_set_notification_text (const char *text)
 {
-  /* No surface needed: the env comes from the default display (valid on the GTK
-   * main thread, where the engine poll runs). ProxyService.setText updates the
-   * live foreground-service notification. */
+  if (g_service_cls == NULL)
+    return; /* bind_notification not run yet */
+
+  /* env from the default display: valid on the GTK main thread, where the engine
+   * poll runs. ProxyService.setText updates the live foreground notification. */
   GdkDisplay *display = gdk_display_get_default ();
   if (display == NULL)
     return;
@@ -129,20 +176,14 @@ tgws_android_set_notification_text (const char *text)
   if (env == NULL)
     return;
 
-  jclass cls = (*env)->FindClass (env, "space/ampernic/anothertgproxy/ProxyService");
-  if (cls == NULL)
-    {
-      (*env)->ExceptionClear (env);
-      return;
-    }
-  jmethodID m = (*env)->GetStaticMethodID (env, cls, "setText", "(Ljava/lang/String;)V");
+  jmethodID m = (*env)->GetStaticMethodID (env, g_service_cls, "setText",
+                                           "(Ljava/lang/String;)V");
   if (m != NULL)
     {
       jstring s = (*env)->NewStringUTF (env, text != NULL ? text : "");
-      (*env)->CallStaticVoidMethod (env, cls, m, s);
+      (*env)->CallStaticVoidMethod (env, g_service_cls, m, s);
       (*env)->DeleteLocalRef (env, s);
     }
-  (*env)->DeleteLocalRef (env, cls);
 }
 
 void

@@ -13,8 +13,13 @@ G_BEGIN_DECLS
 gboolean tgws_android_is_ignoring_battery_optimizations (GdkSurface *surface);
 void     tgws_android_request_ignore_battery_optimizations (GdkSurface *surface);
 
-/* Update the ongoing foreground-service notification's text (live stats). Goes
- * through the cached JavaVM, so it works off the main thread / with no surface. */
+/* Cache the ProxyService class via the activity's (app) class loader. Must be
+ * called once with a realized surface before set_notification_text works: a
+ * native thread's FindClass uses the system loader, which can't see app classes. */
+void tgws_android_bind_notification (GdkSurface *surface);
+
+/* Update the ongoing foreground-service notification's text (live stats). Uses
+ * the class cached by bind_notification, so it needs no surface. */
 void tgws_android_set_notification_text (const char *text);
 
 /* Open this app's system notification settings. */

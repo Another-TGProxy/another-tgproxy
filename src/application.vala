@@ -53,9 +53,13 @@ namespace TgWsProxy {
             if (battery_wired) return;
             battery_wired = true;
             win.notify["is-active"].connect (() => {
-                if (!win.is_active || battery_dialog_open) return;
+                if (!win.is_active) return;
                 var surface = win.get_surface ();
                 if (surface == null) return;
+                // Cache the ProxyService class via the app class loader while we
+                // have a surface, so the engine can later update the notification.
+                TgwsAndroid.bind_notification (surface);
+                if (battery_dialog_open) return;
                 if (TgwsAndroid.is_ignoring_battery_optimizations (surface)) return;
                 show_battery_dialog (win, surface);
             });
