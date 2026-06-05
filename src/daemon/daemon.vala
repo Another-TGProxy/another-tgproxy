@@ -8,7 +8,6 @@ namespace TgWsProxy {
         Config cfg;
         Engine? engine = null;
         SocketService? control = null;
-        FileStream? logfp = null;
         string last_error = "";
         TrayStatus? tray = null;
         Control? control_dbus = null;
@@ -26,15 +25,7 @@ namespace TgWsProxy {
         // ---- engine lifecycle ----
 
         void setup_logging () {
-            if (!cfg.log_to_file) return;
-            Paths.ensure_dir ();
-            logfp = FileStream.open (Paths.log_file (), "a");
-            Log.set_default_handler ((domain, level, msg) => {
-                var ts = new DateTime.now_local ().format ("%H:%M:%S");
-                var line = "%s  %s\n".printf (ts, msg);
-                stderr.printf ("%s", line);
-                if (logfp != null) { logfp.puts (line); logfp.flush (); }
-            });
+            Logging.setup (cfg);
         }
 
         bool start_engine () {

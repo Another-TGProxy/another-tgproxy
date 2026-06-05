@@ -108,6 +108,7 @@ sources = files(
   'src/application.vala',
   'src/config.vala',
   'src/ipc.vala',
+  'src/logging.vala',
   'src/platform.vala',
   'src/ui/window.vala',
   'src/ui/home-view.vala',
