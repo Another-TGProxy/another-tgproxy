@@ -115,3 +115,70 @@ tgws_android_request_ignore_battery_optimizations (GdkSurface *surface)
   (*env)->DeleteLocalRef (env, uri_cls);
   (*env)->DeleteLocalRef (env, intent_cls);
 }
+
+void
+tgws_android_set_notification_text (const char *text)
+{
+  /* No surface needed: the env comes from the default display (valid on the GTK
+   * main thread, where the engine poll runs). ProxyService.setText updates the
+   * live foreground-service notification. */
+  GdkDisplay *display = gdk_display_get_default ();
+  if (display == NULL)
+    return;
+  JNIEnv *env = gdk_android_display_get_env (display);
+  if (env == NULL)
+    return;
+
+  jclass cls = (*env)->FindClass (env, "space/ampernic/anothertgproxy/ProxyService");
+  if (cls == NULL)
+    {
+      (*env)->ExceptionClear (env);
+      return;
+    }
+  jmethodID m = (*env)->GetStaticMethodID (env, cls, "setText", "(Ljava/lang/String;)V");
+  if (m != NULL)
+    {
+      jstring s = (*env)->NewStringUTF (env, text != NULL ? text : "");
+      (*env)->CallStaticVoidMethod (env, cls, m, s);
+      (*env)->DeleteLocalRef (env, s);
+    }
+  (*env)->DeleteLocalRef (env, cls);
+}
+
+void
+tgws_android_open_notification_settings (GdkSurface *surface)
+{
+  JNIEnv *env;
+  jobject activity;
+  GdkAndroidToplevel *toplevel;
+  if (!resolve (surface, &env, &activity, &toplevel))
+    return;
+
+  jstring pkg = package_name (env, activity);
+  jclass intent_cls = (*env)->FindClass (env, "android/content/Intent");
+  jmethodID ctor = (*env)->GetMethodID (env, intent_cls, "<init>", "(Ljava/lang/String;)V");
+  jstring action = (*env)->NewStringUTF (env, "android.settings.APP_NOTIFICATION_SETTINGS");
+  jobject intent = (*env)->NewObject (env, intent_cls, ctor, action);
+
+  /* intent.putExtra("android.provider.extra.APP_PACKAGE", getPackageName()) */
+  jmethodID put = (*env)->GetMethodID (env, intent_cls, "putExtra",
+      "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;");
+  jstring key = (*env)->NewStringUTF (env, "android.provider.extra.APP_PACKAGE");
+  jobject ret = (*env)->CallObjectMethod (env, intent, put, key, pkg);
+  if (ret != NULL)
+    (*env)->DeleteLocalRef (env, ret);
+
+  GError *error = NULL;
+  gdk_android_toplevel_launch_activity (toplevel, intent, &error);
+  if (error != NULL)
+    {
+      g_warning ("notification settings launch failed: %s", error->message);
+      g_clear_error (&error);
+    }
+
+  (*env)->DeleteLocalRef (env, key);
+  (*env)->DeleteLocalRef (env, action);
+  (*env)->DeleteLocalRef (env, intent);
+  (*env)->DeleteLocalRef (env, intent_cls);
+  (*env)->DeleteLocalRef (env, pkg);
+}

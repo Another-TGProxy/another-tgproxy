@@ -80,7 +80,23 @@ namespace TgWsProxy {
             return s;
         }
 
-        void push () { status_changed (snapshot ()); }
+        string last_notif = "";
+
+        void push () {
+            var s = snapshot ();
+            status_changed (s);
+
+            // The foreground-service notification is the Android status display;
+            // keep it in step with the live stats (only re-post on change).
+            var text = engine != null
+                ? s.format (cfg.status_template.length > 0 ? cfg.status_template
+                            : "Telegram · {active} conn. · ↑{up} ↓{down}")
+                : _("Proxy stopped");
+            if (text != last_notif) {
+                last_notif = text;
+                TgwsAndroid.set_notification_text (text);
+            }
+        }
     }
 }
 #endif

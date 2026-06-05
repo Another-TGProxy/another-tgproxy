@@ -15,9 +15,11 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.SpinRow pool_row;
         [GtkChild] private unowned Adw.SwitchRow logfile_row;
         [GtkChild] private unowned Adw.SwitchRow autostart_row;
+        [GtkChild] private unowned Adw.PreferencesGroup status_display_group;
         [GtkChild] private unowned Adw.ToggleGroup status_mode_group;
         [GtkChild] private unowned Adw.PreferencesGroup status_text_group;
         [GtkChild] private unowned Adw.EntryRow status_row;
+        [GtkChild] private unowned Adw.ButtonRow notif_settings_row;
         [GtkChild] private unowned Adw.ButtonRow save_row;
 
         public signal void toast (string message);
@@ -52,7 +54,23 @@ namespace TgWsProxy {
             });
             save_row.activated.connect (save_settings);
 
+#if ANDROID
+            // The only status display on Android is the foreground-service
+            // notification — no modes to pick. Keep the text template (it drives
+            // the notification) and offer the system notification settings.
+            status_display_group.visible = false;
+            status_text_group.visible = true;
+            notif_settings_row.visible = true;
+            notif_settings_row.activated.connect (() => {
+                var win = get_root () as Gtk.Window;
+                if (win == null) return;
+                var surface = win.get_surface ();
+                if (surface != null) TgwsAndroid.open_notification_settings (surface);
+            });
+#else
+            notif_settings_row.visible = false;
             setup_status_modes ();
+#endif
         }
 
         private void setup_status_modes () {

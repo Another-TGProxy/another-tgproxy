@@ -13,4 +13,11 @@ G_BEGIN_DECLS
 gboolean tgws_android_is_ignoring_battery_optimizations (GdkSurface *surface);
 void     tgws_android_request_ignore_battery_optimizations (GdkSurface *surface);
 
+/* Update the ongoing foreground-service notification's text (live stats). Goes
+ * through the cached JavaVM, so it works off the main thread / with no surface. */
+void tgws_android_set_notification_text (const char *text);
+
+/* Open this app's system notification settings. */
+void tgws_android_open_notification_settings (GdkSurface *surface);
+
 G_END_DECLS

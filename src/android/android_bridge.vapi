@@ -5,4 +5,8 @@ namespace TgwsAndroid {
     public bool is_ignoring_battery_optimizations (Gdk.Surface surface);
     [CCode (cname = "tgws_android_request_ignore_battery_optimizations")]
     public void request_ignore_battery_optimizations (Gdk.Surface surface);
+    [CCode (cname = "tgws_android_set_notification_text")]
+    public void set_notification_text (string text);
+    [CCode (cname = "tgws_android_open_notification_settings")]
+    public void open_notification_settings (Gdk.Surface surface);
 }

@@ -80,7 +80,7 @@ template $TgWsProxySettingsView : Adw.Bin {
         }
       }
 
-      Adw.PreferencesGroup {
+      Adw.PreferencesGroup status_display_group {
         title: _("Status display");
         description: _("Where the live proxy status is shown");
 
@@ -94,6 +94,11 @@ template $TgWsProxySettingsView : Adw.Bin {
 
         Adw.EntryRow status_row {
           title: _("Template");
+        }
+
+        Adw.ButtonRow notif_settings_row {
+          title: _("Notification settings");
+          start-icon-name: "emblem-system-symbolic";
         }
       }
 

@@ -11,25 +11,41 @@ import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 
-// An ongoing foreground service whose only job is to hold the process at
-// foreground priority while the in-process proxy runs. It does no work itself —
-// the engine lives on its own threads in the same process.
+// An ongoing foreground service that holds the process at foreground priority
+// while the in-process proxy runs (the engine lives on its own threads in the
+// same process). Its notification doubles as the Android status display, updated
+// live from the engine via ProxyService.setText() (called through the JNI bridge).
 public class ProxyService extends Service {
 	private static final String CHANNEL = "proxy";
 	private static final int NOTIFICATION_ID = 1;
 
+	private static volatile ProxyService instance;
+
+	private String text = "Proxy running in the background";
+
 	@Override
 	public void onCreate() {
 		super.onCreate();
+		instance = this;
 
-		NotificationManager nm = getSystemService(NotificationManager.class);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 			NotificationChannel ch = new NotificationChannel(
 					CHANNEL, "Proxy", NotificationManager.IMPORTANCE_LOW);
 			ch.setShowBadge(false);
-			nm.createNotificationChannel(ch);
+			getSystemService(NotificationManager.class).createNotificationChannel(ch);
 		}
 
+		try {
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+				startForeground(NOTIFICATION_ID, build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+			else
+				startForeground(NOTIFICATION_ID, build());
+		} catch (Exception e) {
+			stopSelf();
+		}
+	}
+
+	private Notification build() {
 		Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
 		PendingIntent pi = launch == null ? null : PendingIntent.getActivity(
 				this, 0, launch,
@@ -38,26 +54,28 @@ public class ProxyService extends Service {
 		Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
 				? new Notification.Builder(this, CHANNEL)
 				: new Notification.Builder(this);
-		Notification n = b
+		return b
 				.setContentTitle("Another TGProxy")
-				.setContentText("Proxy running in the background")
+				.setContentText(text)
 				// A simple monochrome vector (the adaptive-icon foreground) — a
 				// full colour/adaptive icon is not a valid notification small icon.
 				.setSmallIcon(R.drawable.ic_launcher_foreground)
 				.setContentIntent(pi)
 				.setOngoing(true)
 				.build();
+	}
 
-		try {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-				startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-			else
-				startForeground(NOTIFICATION_ID, n);
-		} catch (Exception e) {
-			// Don't take the process down if promotion is refused; fall back to a
-			// plain service rather than crashing the whole app.
-			stopSelf();
-		}
+	private void update() {
+		getSystemService(NotificationManager.class).notify(NOTIFICATION_ID, build());
+	}
+
+	// Called from the engine (via the JNI bridge) to show live stats.
+	public static void setText(String s) {
+		ProxyService i = instance;
+		if (i == null || s == null)
+			return;
+		i.text = s;
+		i.update();
 	}
 
 	@Override
@@ -75,6 +93,13 @@ public class ProxyService extends Service {
 	@Override
 	public void onTimeout(int startId) {
 		stopSelf();
+	}
+
+	@Override
+	public void onDestroy() {
+		if (instance == this)
+			instance = null;
+		super.onDestroy();
 	}
 
 	// Swiping the app away from recents tears down the process; don't keep a
