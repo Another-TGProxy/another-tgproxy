@@ -37,40 +37,45 @@ namespace TgWsProxy {
             }
             win.present ();
 #if ANDROID
-            maybe_prompt_battery (win);
+            wire_battery_prompt (win);
 #endif
         }
 
 #if ANDROID
-        bool battery_prompted = false;
+        bool battery_wired = false;
+        bool battery_dialog_open = false;
 
         // A foreground service alone doesn't survive Doze / App Standby; nudge the
-        // user to exempt the app from battery optimization. Shown as a normal Adw
-        // dialog; "Open settings" jumps straight to the per-app confirmation via
-        // the gdk-android bridge. Wait for the surface so the bridge has a toplevel.
-        void maybe_prompt_battery (Gtk.Window win) {
-            if (battery_prompted) return;
-            ulong id = 0;
-            id = win.map.connect (() => {
-                win.disconnect (id);
+        // user to exempt the app from battery optimization. Checked every time the
+        // window comes to the foreground (so it keeps asking until granted); by then
+        // the surface is a realized Android toplevel, which the bridge needs.
+        void wire_battery_prompt (Gtk.Window win) {
+            if (battery_wired) return;
+            battery_wired = true;
+            win.notify["is-active"].connect (() => {
+                if (!win.is_active || battery_dialog_open) return;
                 var surface = win.get_surface ();
-                if (surface == null || battery_prompted) return;
+                if (surface == null) return;
                 if (TgwsAndroid.is_ignoring_battery_optimizations (surface)) return;
-                battery_prompted = true;
-
-                var dialog = new Adw.AlertDialog (
-                    _("Background operation"),
-                    _("To keep the proxy running in the background, disable battery optimization for this app. Otherwise Android may stop it after a while."));
-                dialog.add_response ("later", _("Later"));
-                dialog.add_response ("settings", _("Open settings"));
-                dialog.set_response_appearance ("settings", Adw.ResponseAppearance.SUGGESTED);
-                dialog.set_default_response ("settings");
-                dialog.response.connect ((resp) => {
-                    if (resp == "settings")
-                        TgwsAndroid.request_ignore_battery_optimizations (surface);
-                });
-                dialog.present (win);
+                show_battery_dialog (win, surface);
             });
+        }
+
+        void show_battery_dialog (Gtk.Window win, Gdk.Surface surface) {
+            battery_dialog_open = true;
+            var dialog = new Adw.AlertDialog (
+                _("Background operation"),
+                _("To keep the proxy running in the background, disable battery optimization for this app. Otherwise Android may stop it after a while."));
+            dialog.add_response ("later", _("Later"));
+            dialog.add_response ("settings", _("Open settings"));
+            dialog.set_response_appearance ("settings", Adw.ResponseAppearance.SUGGESTED);
+            dialog.set_default_response ("settings");
+            dialog.response.connect ((resp) => {
+                battery_dialog_open = false;
+                if (resp == "settings")
+                    TgwsAndroid.request_ignore_battery_optimizations (surface);
+            });
+            dialog.present (win);
         }
 #endif
 

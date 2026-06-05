@@ -11,13 +11,21 @@ static gboolean
 resolve (GdkSurface *surface, JNIEnv **env, jobject *activity, GdkAndroidToplevel **toplevel)
 {
   if (surface == NULL || !GDK_IS_ANDROID_TOPLEVEL (surface))
-    return FALSE;
+    {
+      g_warning ("android bridge: surface is not an Android toplevel yet");
+      return FALSE;
+    }
   GdkDisplay *display = gdk_surface_get_display (surface);
   *env = gdk_android_display_get_env (display);
   if (*env == NULL)
-    return FALSE;
+    {
+      g_warning ("android bridge: no JNI env from display");
+      return FALSE;
+    }
   *toplevel = GDK_ANDROID_TOPLEVEL (surface);
   *activity = gdk_android_toplevel_get_activity (*toplevel);
+  if (*activity == NULL)
+    g_warning ("android bridge: toplevel has no activity");
   return *activity != NULL;
 }
 
@@ -38,7 +46,7 @@ tgws_android_is_ignoring_battery_optimizations (GdkSurface *surface)
   jobject activity;
   GdkAndroidToplevel *toplevel;
   if (!resolve (surface, &env, &activity, &toplevel))
-    return TRUE; /* can't tell -> don't nag */
+    return FALSE; /* couldn't check -> let the UI prompt rather than skip */
 
   jclass ctx = (*env)->GetObjectClass (env, activity);
   jmethodID get_service = (*env)->GetMethodID (env, ctx, "getSystemService",
