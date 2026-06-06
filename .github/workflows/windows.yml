@@ -55,6 +55,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ca-certificates
             mingw-w64-ucrt-x86_64-librsvg
             mingw-w64-ucrt-x86_64-adwaita-icon-theme
+            mingw-w64-ucrt-x86_64-vulkan-loader
 
       - name: Build app + bundle portable zip
         env:

@@ -46,6 +46,14 @@ info "Copying dependent DLLs..."
 copy_dll_deps "$DIST/bin/$BIN"
 for dll in "$DIST"/bin/*.dll; do copy_dll_deps "$dll"; done
 
+# GTK4 imports vulkan-1.dll for its Vulkan renderer. ldd on the CI runner resolves
+# it to System32 (so the loop skips it), but a plain Windows install may not have
+# it; ship the MinGW loader so the app starts (GTK falls back to GL/cairo with no
+# GPU). Same idea for any other DLL that lives in ucrt64 but resolves to System32.
+for sysdll in vulkan-1.dll; do
+  [ -f "$PREFIX/bin/$sysdll" ] && cp -n "$PREFIX/bin/$sysdll" "$DIST/bin/" || true
+done
+
 # -- 3. gdk-pixbuf loaders (SVG symbolic icons need librsvg) -------------------
 info "Bundling gdk-pixbuf loaders..."
 LOADERS_DST="$DIST/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders"
