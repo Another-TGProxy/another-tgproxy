@@ -45,12 +45,14 @@ conf.set_quoted('BUGTRACKER', bugtracker)
 conf.set10('IS_DEVEL', is_devel)
 config_h = configure_file(output: 'build-config.h', configuration: conf)
 
-# On Android GLib falls back to proxy-libintl built -DSTUB_ONLY, so gettext is a
-# no-op and nothing (GLib, GTK or this app) translates. Override the 'intl'
-# dependency with a real libintl BEFORE GLib is configured (below), so the whole
-# stack links it instead of the stub.
+# On Android GLib/GTK fall back to proxy-libintl built -DSTUB_ONLY, so gettext is
+# a no-op and nothing (GLib, GTK or this app) translates. We ship a real libintl
+# AS the "proxy-libintl" subproject and configure it first: claiming that name
+# makes GTK's anonymous `dependency('', fallback: ['proxy-libintl', ...])` reuse
+# ours instead of fetching the stub, while the override covers GLib's named
+# `dependency('intl')`. Both must happen before GLib is configured (below).
 if host_machine.system() == 'android'
-  intl_subproject = subproject('realintl')
+  intl_subproject = subproject('proxy-libintl')
   meson.override_dependency('intl', intl_subproject.get_variable('intl_dep'))
 endif
 
