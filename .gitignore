@@ -13,3 +13,10 @@ po/*.pot
 # editor
 *~
 .vscode/settings.json
+
+# Wrap-fetched subprojects (proxy-libintl is vendored and tracked)
+/subprojects/mtproxy-ws/
+/subprojects/json-glib/
+/subprojects/json-glib-*/
+/subprojects/*.wraplock
+/subprojects/packagecache/

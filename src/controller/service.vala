@@ -25,6 +25,7 @@ namespace TgWsProxy {
         public void set_autostart (bool on) { }
         public bool is_autostart () { return false; }
 #else
+#if !WINDOWS
         static string object_path () {
             return "/" + Build.DAEMON_ID.replace (".", "/");
         }
@@ -33,6 +34,7 @@ namespace TgWsProxy {
             return Path.build_filename (Environment.get_user_config_dir (),
                                         "autostart", Build.DAEMON_ID + ".desktop");
         }
+#endif
 
         // Start the daemon. Prefer D-Bus activation so it gets its own scope and
         // survives this GUI closing (essential under Flatpak, where a child of the
@@ -49,6 +51,17 @@ namespace TgWsProxy {
                 failed (_("Port %d is already in use — the proxy may already be running, possibly in another environment (e.g. Flatpak).").printf (cfg.port));
                 return;
             }
+#if WINDOWS
+            // No D-Bus activation on Windows; the same .exe re-runs in --daemon
+            // mode as an independent process (it outlives this GUI on its own).
+            try {
+                new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE,
+                                daemon_exec (), "--daemon");
+                verify_started.begin ();
+            } catch (Error e) {
+                failed (_("Failed to start the service: %s").printf (e.message));
+            }
+#else
             // Running as an AppImage we have no D-Bus service of our own; the one
             // installed on the system may belong to a different delivery (e.g. a
             // Flatpak), and activating it would launch THAT daemon instead. So spawn
@@ -65,6 +78,7 @@ namespace TgWsProxy {
             } catch (Error e) {
                 failed (_("Failed to start the service: %s").printf (e.message));
             }
+#endif
         }
 
         // True if something is already listening on the configured proxy address.
@@ -104,6 +118,7 @@ namespace TgWsProxy {
             yield;
         }
 
+#if !WINDOWS
         bool dbus_activate () {
             try {
                 var conn = Bus.get_sync (BusType.SESSION);
@@ -117,7 +132,69 @@ namespace TgWsProxy {
                 return false;
             }
         }
+#endif
 
+#if WINDOWS
+        // No D-Bus on Windows: the daemon writes its PID; stop it by that PID
+        // (the GUI shares the .exe image name, so taskkill /IM would hit both).
+        public void stop () {
+            string pid;
+            try {
+                if (!FileUtils.get_contents (Paths.pid_file (), out pid)) return;
+            } catch (Error e) {
+                return;
+            }
+            pid = pid.strip ();
+            if (pid == "") return;
+            try {
+                new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE,
+                                "taskkill", "/PID", pid, "/T", "/F");
+            } catch (Error e) {
+                warning ("taskkill failed: %s", e.message);
+            }
+        }
+
+        public void restart () { stop (); start (); }
+
+        // Active if something is listening on the proxy port (the daemon binds it).
+        public bool is_active () {
+            return proxy_port_in_use ();
+        }
+
+        // Autostart at login = an HKCU\...\Run value launching the daemon.
+        const string RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+
+        public void set_autostart (bool on) {
+            try {
+                if (on) {
+                    var cmd = "\"%s\" --daemon".printf (daemon_exec ());
+                    new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE,
+                                    "reg", "add", RUN_KEY, "/v", Build.APP_DIRNAME,
+                                    "/t", "REG_SZ", "/d", cmd, "/f");
+                } else {
+                    new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE,
+                                    "reg", "delete", RUN_KEY, "/v", Build.APP_DIRNAME, "/f");
+                }
+            } catch (Error e) {
+                warning ("autostart reg failed: %s", e.message);
+            }
+        }
+
+        public bool is_autostart () {
+            try {
+                var p = new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE,
+                                        "reg", "query", RUN_KEY, "/v", Build.APP_DIRNAME);
+                p.wait (null);
+                return p.get_if_exited () && p.get_exit_status () == 0;
+            } catch (Error e) {
+                return false;
+            }
+        }
+
+        static string daemon_exec () {
+            return Win.exe_path ();
+        }
+#else
         // Ask the daemon to quit via its exported GAction (org.freedesktop.Application).
         public void stop () {
             try {
@@ -210,6 +287,7 @@ namespace TgWsProxy {
                 return "another-tgproxy";
             }
         }
+#endif
 #endif
     }
 }

@@ -63,12 +63,16 @@ mtproxy_dep = dependency('mtproxy-ws',
 deps = [
   dependency('glib-2.0'),
   dependency('gio-2.0'),
-  dependency('gio-unix-2.0'),
   dependency('gtk4'),
   dependency('libadwaita-1', version: '>= 1.7'),   # Adw.WrapBox, Adw.ToggleGroup
   dependency('json-glib-1.0'),
   mtproxy_dep,
 ]
+# gio-unix (Unix sockets, GDesktopAppInfo) is Linux/macOS-only; Windows uses TCP
+# + token IPC and has no .desktop, all behind #if WINDOWS.
+if host_machine.system() != 'windows'
+  deps += dependency('gio-unix-2.0')
+endif
 
 # The core ships its Vala binding (mtproxy-ws.vapi) in its own datadir; add it
 # to valac's search path so this builds against a non-system install too.
@@ -77,6 +81,10 @@ if host_machine.system() == 'darwin'
   # GDesktopAppInfo / SNI / session D-Bus are Linux-only; macOS code paths are
   # guarded with #if DARWIN in the Vala sources.
   vala_extra += ['--define=DARWIN']
+elif host_machine.system() == 'windows'
+  # No Unix sockets / D-Bus / glib-unix signals on Windows: control IPC is TCP
+  # + token, the service is a detached process, all behind #if WINDOWS.
+  vala_extra += ['--define=WINDOWS']
 elif host_machine.system() == 'android'
   # Android is single-process (no daemon/D-Bus/tray); #if ANDROID code paths.
   vala_extra += ['--define=ANDROID']
@@ -141,13 +149,22 @@ endif
 # Platform-specific extras (macOS menu-bar tray via NSStatusItem; Android JNI glue).
 mac_sources = []
 android_sources = []
+win_sources = []
 extra_deps = []
+extra_link_args = []
 inc_dirs = ['.']
 if host_machine.system() == 'darwin'
   add_languages('objc', native: false)
   mac_sources = files('src/mac/mac_tray.m', 'src/mac/mac_tray.vapi')
   extra_deps += dependency('appleframeworks', modules: ['Cocoa'])
   inc_dirs += 'src/mac'
+elif host_machine.system() == 'windows'
+  # Win32 glue (running-exe path, PID; the Shell_NotifyIcon tray lands here too).
+  win_sources = files('src/win/win_compat.c', 'src/win/win_compat.vapi')
+  inc_dirs += 'src/win'
+  # Build for the GUI subsystem so neither the app nor the spawned --daemon flashes
+  # a console window.
+  extra_link_args += '-mwindows'
 elif host_machine.system() == 'android'
   # C glue over the gdk-android public API (battery-optimization exemption, …).
   android_sources = files('src/android/android_bridge.c', 'src/android/android_bridge.vapi')
@@ -162,10 +179,11 @@ if host_machine.system() == 'android'
 endif
 
 executable('another-tgproxy',
-  sources, mac_sources, android_sources, config_h, resources,
+  sources, mac_sources, android_sources, win_sources, config_h, resources,
   dependencies: deps + extra_deps,
   vala_args: vala_extra,
   c_args: ['-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name())],
+  link_args: extra_link_args,
   include_directories: include_directories(inc_dirs),
   kwargs: exe_kwargs,
   install: true,
@@ -177,7 +195,7 @@ subdir('data')
 # Desktop-install hooks (icon cache / desktop database). Skipped on the Android
 # cross build: they'd run cross-built host tools (gtk4-update-icon-cache) that
 # need an exe_wrapper, and an APK has no such caches anyway.
-if host_machine.system() != 'android'
+if host_machine.system() == 'linux'
   gnome.post_install(
     gtk_update_icon_cache: true,
     update_desktop_database: true,

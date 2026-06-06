@@ -53,6 +53,28 @@ namespace TgWsProxy {
 
         async void try_connect () {
             while (want_connected && !connected) {
+#if WINDOWS
+                ControlEndpoint ep;
+                if (read_control_endpoint (out ep)) {
+                    try {
+                        var client = new SocketClient ();
+                        conn = yield client.connect_async (
+                            new InetSocketAddress (
+                                new InetAddress.loopback (SocketFamily.IPV4), ep.port),
+                            null);
+                        os = conn.output_stream;
+                        // Authenticate first: the daemon drops us otherwise.
+                        yield os.write_all_async ((ep.token + "\n").data,
+                                                  Priority.DEFAULT, null, null);
+                        connected = true;
+                        connection_changed (true);
+                        read_loop.begin ();
+                        return;
+                    } catch (Error e) {
+                        conn = null;
+                    }
+                }
+#else
                 var path = Paths.control_sock ();
                 if (FileUtils.test (path, FileTest.EXISTS)) {
                     try {
@@ -68,6 +90,7 @@ namespace TgWsProxy {
                         conn = null;
                     }
                 }
+#endif
                 // retry shortly
                 yield sleep_async (1000);
             }

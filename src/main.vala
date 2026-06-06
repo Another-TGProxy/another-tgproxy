@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 int main (string[] args) {
     Intl.setlocale (LocaleCategory.ALL, "");
+#if WINDOWS
+    // No system CA store path on Windows; the engine's TLS verify (CF domains)
+    // reads SSL_CERT_FILE first, so point it at the CA bundle shipped next to the
+    // .exe (<dir>/ssl/certs/ca-bundle.crt) unless the user already set one.
+    if (Environment.get_variable ("SSL_CERT_FILE") == null) {
+        var ca = Path.build_filename (
+            Path.get_dirname (Win.exe_path ()), "ssl", "certs", "ca-bundle.crt");
+        if (FileUtils.test (ca, FileTest.EXISTS))
+            Environment.set_variable ("SSL_CERT_FILE", ca, true);
+    }
+#endif
     // Inside an AppImage the install prefix is the (relocatable) mount point, so
     // the baked-in LOCALEDIR doesn't exist; $APPDIR points at the bundle root.
     string localedir = Build.LOCALEDIR;

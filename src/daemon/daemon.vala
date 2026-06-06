@@ -8,6 +8,9 @@ namespace TgWsProxy {
         Config cfg;
         Engine? engine = null;
         SocketService? control = null;
+#if WINDOWS
+        string control_token = "";
+#endif
         string last_error = "";
         TrayStatus? tray = null;
         Control? control_dbus = null;
@@ -97,9 +100,13 @@ namespace TgWsProxy {
         // alive — selecting any mode tears the others down.
         void reconcile_status_mode () {
             current_mode = Platform.get_default ().mode_of (cfg.status_mode);
+#if !DARWIN && !WINDOWS
+            // The SNI tray is the daemon's only on Linux; on macOS/Windows the
+            // native tray (NSStatusItem / Shell_NotifyIcon) lives in the GUI.
             bool want_tray = current_mode == StatusMode.TRAY;
             if (want_tray && tray == null) setup_tray ();
             else if (!want_tray && tray != null) { tray.close (); tray = null; }
+#endif
         }
 
         // StatusMode.NOTIFICATION is reserved for an Android foreground-service
@@ -149,9 +156,9 @@ namespace TgWsProxy {
         }
 
         void open_gui () {
-#if DARWIN
-            // No .desktop on macOS; the window is raised through the app itself.
-            // TODO(macos): wire to the single-process window (stage 3).
+#if DARWIN || WINDOWS
+            // No .desktop here; the tray that raises the window lives in the GUI
+            // process (NSStatusItem / Shell_NotifyIcon), not in this daemon.
 #else
             var info = new DesktopAppInfo (Build.APP_ID_RELEVANT + ".desktop");
             if (info == null) return;
@@ -205,13 +212,26 @@ namespace TgWsProxy {
         // ---- control server (Unix socket) ----
 
         void start_control () throws Error {
+            control = new SocketService ();
+#if WINDOWS
+            // No Unix sockets: listen on an ephemeral loopback TCP port and
+            // publish the chosen port + an auth token for the GUI to read.
+            var listen = new InetSocketAddress (
+                new InetAddress.loopback (SocketFamily.IPV4), 0);
+            SocketAddress? effective = null;
+            control.add_address (listen, SocketType.STREAM, SocketProtocol.TCP,
+                                 null, out effective);
+            control_token = gen_control_token ();
+            write_control_endpoint (((InetSocketAddress) effective).get_port (),
+                                    control_token);
+#else
             var sockpath = Paths.control_sock ();
             if (FileUtils.test (sockpath, FileTest.EXISTS))
                 FileUtils.unlink (sockpath);   // stale socket from a prior crash
-            control = new SocketService ();
             var addr = new UnixSocketAddress (sockpath);
             control.add_address (addr, SocketType.STREAM, SocketProtocol.DEFAULT, null, null);
             FileUtils.chmod (sockpath, 0600);
+#endif
             control.incoming.connect ((conn, src) => {
                 handle_control.begin ((SocketConnection) conn);
                 return false;
@@ -233,11 +253,24 @@ namespace TgWsProxy {
 
         async void handle_control (SocketConnection conn) {
             var os = conn.output_stream;
+            var dis = new DataInputStream (conn.input_stream);
+#if WINDOWS
+            // A loopback port is reachable by any local process; require the token
+            // (sent as the first line) before trusting the connection.
+            try {
+                var auth = yield dis.read_line_async (Priority.DEFAULT, null);
+                if (auth == null || auth.strip () != control_token) {
+                    try { conn.close (); } catch (Error e) { }
+                    return;
+                }
+            } catch (Error e) {
+                return;
+            }
+#endif
             clients.add (os);
             try {
                 yield os.write_all_async (snapshot ().to_line ().data,
                                           Priority.DEFAULT, null, null);
-                var dis = new DataInputStream (conn.input_stream);
                 string? line;
                 while ((line = yield dis.read_line_async (Priority.DEFAULT, null)) != null) {
                     var cmd = command_of (line);
@@ -269,6 +302,11 @@ namespace TgWsProxy {
             base.startup ();
             hold ();   // keep running with no windows
             Paths.ensure_dir ();
+#if WINDOWS
+            // No D-Bus / signals on Windows; the GUI stops us by this PID.
+            try { FileUtils.set_contents (Paths.pid_file (), Win.pid ().to_string ()); }
+            catch (Error e) { warning ("pid write failed: %s", e.message); }
+#endif
             cfg = Config.load ();
             setup_logging ();
 
@@ -292,8 +330,10 @@ namespace TgWsProxy {
                 return Source.CONTINUE;
             });
 
+#if !WINDOWS
             Unix.signal_add (Posix.Signal.TERM, () => { do_quit (); return Source.REMOVE; });
             Unix.signal_add (Posix.Signal.INT, () => { do_quit (); return Source.REMOVE; });
+#endif
         }
 
         public override void activate () {
@@ -303,15 +343,24 @@ namespace TgWsProxy {
         public override void shutdown () {
             stop_engine ();
             if (control != null) control.stop ();
-            FileUtils.unlink (Paths.control_sock ());
+            cleanup_control ();
             base.shutdown ();
+        }
+
+        static void cleanup_control () {
+#if WINDOWS
+            FileUtils.unlink (Paths.control_json ());
+            FileUtils.unlink (Paths.pid_file ());
+#else
+            FileUtils.unlink (Paths.control_sock ());
+#endif
         }
 
         void do_quit () {
             stop_engine ();
             if (tray != null) { tray.close (); tray = null; }
             if (control != null) { control.stop (); control = null; }
-            FileUtils.unlink (Paths.control_sock ());
+            cleanup_control ();
             release ();   // drop the hold so the app can exit
             quit ();
         }
