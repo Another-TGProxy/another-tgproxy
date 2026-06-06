@@ -1,4 +1,5 @@
 src/main.vala
+src/application.vala
 src/ui/window.vala
 src/ui/home-view.vala
 src/ui/settings-view.vala

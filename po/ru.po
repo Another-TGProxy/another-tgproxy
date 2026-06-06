@@ -185,3 +185,22 @@ msgstr "Не удалось запустить службу."
 
 msgid "MTProto to WebSocket bridge proxy for Telegram"
 msgstr "MTProto↔WebSocket прокси для Telegram"
+
+msgid "Background operation"
+msgstr "Работа в фоне"
+
+msgid ""
+"To keep the proxy running in the background, disable battery optimization for "
+"this app. Otherwise Android may stop it after a while."
+msgstr ""
+"Чтобы прокси продолжал работать в фоне, отключите оптимизацию батареи для "
+"этого приложения. Иначе Android через некоторое время остановит его."
+
+msgid "Open settings"
+msgstr "Открыть настройки"
+
+msgid "Later"
+msgstr "Позже"
+
+msgid "Notification settings"
+msgstr "Настройки уведомлений"
