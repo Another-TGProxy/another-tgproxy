@@ -9,6 +9,13 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    paths:
+      - 'src/**'
+      - 'data/**'
+      - 'po/**'
+      - 'meson.build'
+      - 'packaging/flatpak/**'
+      - '.github/workflows/publish-flatpak.yml'
   workflow_dispatch:
 
 jobs:
@@ -52,6 +59,10 @@ jobs:
           TOKEN: ${{ secrets.FLATPAK_DISPATCH_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::warning::FLATPAK_DISPATCH_TOKEN not set — skipping publish"
+            exit 0
+          fi
           payload=$(jq -n \
             --arg id  'space.ampernic.AnotherTGProxy' \
             --arg ch  "$CHANNEL" \

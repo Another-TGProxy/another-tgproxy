@@ -12,8 +12,9 @@ on:
     paths:
       - 'src/**'
       - 'data/**'
+      - 'po/**'
       - 'meson.build'
-      - 'subprojects/*.wrap'
+      - 'subprojects/**'
       - 'packaging/android/**'
       - '.github/workflows/android.yml'
 

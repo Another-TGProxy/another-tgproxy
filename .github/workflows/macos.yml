@@ -4,24 +4,28 @@ on:
   push:
     branches: ['**']
     tags: ['v*']
+    paths: &paths
+      - 'src/**'
+      - 'data/**'
+      - 'po/**'
+      - 'meson.build'
+      - 'subprojects/**'
+      - 'packaging/macos/**'
+      - '.github/workflows/macos.yml'
   pull_request:
-    branches: ['**']
+    paths: *paths
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # Apple Silicon only: the Intel (macos-13) runners are gone, and a Homebrew
+  # build can't be lipo'd universal (the deps are single-arch), so we ship arm64.
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15   # Apple Silicon (arm64)
-            arch: arm64
-          - runner: macos-13   # Intel (x86_64)
-            arch: x86_64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
+    env:
+      arch: arm64
     steps:
       - name: Checkout GUI
         uses: actions/checkout@v4
@@ -36,7 +40,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/Homebrew
-          key: brew-macos-${{ matrix.arch }}-${{ hashFiles('.github/workflows/macos.yml') }}
+          key: brew-macos-${{ env.arch }}-${{ hashFiles('.github/workflows/macos.yml') }}
 
       - name: Install dependencies
         run: |
@@ -57,7 +61,7 @@ jobs:
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: another-tgproxy-macos-${{ matrix.arch }}
+          name: another-tgproxy-macos-${{ env.arch }}
           path: dist/*.dmg
           retention-days: 14
 

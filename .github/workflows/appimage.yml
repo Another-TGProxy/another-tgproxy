@@ -4,8 +4,16 @@ on:
   push:
     branches: ['**']
     tags: ['v*']
+    paths: &paths
+      - 'src/**'
+      - 'data/**'
+      - 'po/**'
+      - 'meson.build'
+      - 'subprojects/**'
+      - '.github/workflows/appimage.yml'
   pull_request:
-    branches: ['**']
+    paths: *paths
+  workflow_dispatch:
 
 permissions:
   contents: write
