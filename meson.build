@@ -45,6 +45,15 @@ conf.set_quoted('BUGTRACKER', bugtracker)
 conf.set10('IS_DEVEL', is_devel)
 config_h = configure_file(output: 'build-config.h', configuration: conf)
 
+# On Android GLib falls back to proxy-libintl built -DSTUB_ONLY, so gettext is a
+# no-op and nothing (GLib, GTK or this app) translates. Override the 'intl'
+# dependency with a real libintl BEFORE GLib is configured (below), so the whole
+# stack links it instead of the stub.
+if host_machine.system() == 'android'
+  intl_subproject = subproject('realintl')
+  meson.override_dependency('intl', intl_subproject.get_variable('intl_dep'))
+endif
+
 # Use the system core on desktop; on Android (no system lib) fall back to the
 # mtproxy-ws meson subproject (subprojects/mtproxy-ws.wrap).
 mtproxy_dep = dependency('mtproxy-ws',
