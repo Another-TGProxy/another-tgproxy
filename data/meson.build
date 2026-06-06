@@ -1,6 +1,11 @@
 base = 'space.ampernic.AnotherTGProxy'
 po_dir = meson.project_source_root() / 'po'
 
+# Desktop entry, AppStream metainfo and D-Bus activation are Linux/desktop
+# integration; Windows ships a self-contained zip with none of these (and its
+# msgfmt lacks the AppStream ITS rules), so skip them there.
+if host_machine.system() != 'windows'
+
 # Desktop entry: @-substitute, then merge translations from po/.
 desktop_conf = configuration_data()
 desktop_conf.set('APP_ID', app_id_relevant)
@@ -71,6 +76,8 @@ configure_file(
   install: true,
   install_dir: get_option('datadir') / 'dbus-1' / 'services',
 )
+
+endif  # not windows
 
 # Icons renamed to the profile-relevant app-id so a Devel build resolves its own.
 # The development profile ships its striped Devel variant (scalable only).

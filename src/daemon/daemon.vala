@@ -114,6 +114,7 @@ namespace TgWsProxy {
         // desktop: GNOME has no persistent notification, so it would only spam
         // banners. The Android port wires its presenter here.
 
+#if !DARWIN && !WINDOWS
         void setup_tray () {
             tray = new TrayStatus ();
             tray.open_requested.connect (open_gui);
@@ -122,6 +123,7 @@ namespace TgWsProxy {
             tray.restart_requested.connect (restart_engine);
             tray.quit_requested.connect (() => { do_quit (); });
         }
+#endif
 
         // D-Bus control surface for the GNOME Shell quick-settings extension.
         void setup_control () {
