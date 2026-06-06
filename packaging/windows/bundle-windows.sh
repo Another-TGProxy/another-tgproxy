@@ -14,17 +14,14 @@ PIXBUF_VER=2.10.0
 
 info () { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 
-# Copy a PE's MinGW DLL dependencies (transitive) into $DIST/bin.
+# Copy a PE's MinGW DLL dependencies (transitive) into $DIST/bin. grep finding
+# nothing must not abort the script (set -e + pipefail), hence the guards.
 copy_dll_deps () {
-  local target="$1"
-  ldd "$target" 2>/dev/null \
-    | awk '{print $3}' \
-    | grep -iE "(^|/)ucrt64/bin/" \
-    | sort -u \
-    | while read -r dll; do
-        [ -f "$dll" ] || continue
-        cp -n "$dll" "$DIST/bin/"
-      done
+  local target="$1" dll
+  for dll in $(ldd "$target" 2>/dev/null | awk '{print $3}' \
+               | grep -iE "(^|/)ucrt64/bin/" | sort -u || true); do
+    [ -f "$dll" ] && cp -n "$dll" "$DIST/bin/" || true
+  done
 }
 
 # -- 1. Build core + gui into the staging prefix ------------------------------
