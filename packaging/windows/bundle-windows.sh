@@ -54,6 +54,12 @@ for sysdll in vulkan-1.dll; do
   [ -f "$PREFIX/bin/$sysdll" ] && cp -n "$PREFIX/bin/$sysdll" "$DIST/bin/" || true
 done
 
+# GLib spawns child processes (the GUI launches the --daemon) through these
+# helper exes at runtime; ldd can't see them, so copy them explicitly.
+for helper in "$PREFIX"/bin/gspawn-win*-helper.exe "$PREFIX"/bin/gspawn-win*-helper-console.exe; do
+  [ -f "$helper" ] && cp -n "$helper" "$DIST/bin/" || true
+done
+
 # -- 3. gdk-pixbuf loaders (SVG symbolic icons need librsvg) -------------------
 info "Bundling gdk-pixbuf loaders..."
 LOADERS_DST="$DIST/lib/gdk-pixbuf-2.0/$PIXBUF_VER/loaders"

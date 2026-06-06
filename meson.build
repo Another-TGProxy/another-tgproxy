@@ -162,9 +162,6 @@ elif host_machine.system() == 'windows'
   # Win32 glue (running-exe path, PID; the Shell_NotifyIcon tray lands here too).
   win_sources = files('src/win/win_compat.c', 'src/win/win_compat.vapi')
   inc_dirs += 'src/win'
-  # Build for the GUI subsystem so neither the app nor the spawned --daemon flashes
-  # a console window.
-  extra_link_args += '-mwindows'
 elif host_machine.system() == 'android'
   # C glue over the gdk-android public API (battery-optimization exemption, …).
   android_sources = files('src/android/android_bridge.c', 'src/android/android_bridge.vapi')
@@ -176,6 +173,9 @@ endif
 exe_kwargs = {}
 if host_machine.system() == 'android'
   exe_kwargs = {'android_exe_type': 'application'}
+elif host_machine.system() == 'windows'
+  # GUI subsystem: neither the app nor the spawned --daemon flashes a console.
+  exe_kwargs = {'win_subsystem': 'windows'}
 endif
 
 executable('another-tgproxy',
