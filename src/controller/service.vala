@@ -29,11 +29,6 @@ namespace TgWsProxy {
         static string object_path () {
             return "/" + Build.DAEMON_ID.replace (".", "/");
         }
-
-        static string autostart_file () {
-            return Path.build_filename (Environment.get_user_config_dir (),
-                                        "autostart", Build.DAEMON_ID + ".desktop");
-        }
 #endif
 
         // Start the daemon. Prefer D-Bus activation so it gets its own scope and
@@ -246,8 +241,71 @@ namespace TgWsProxy {
             }
         }
 
-        // Autostart at login = an XDG autostart .desktop pointing at the daemon.
+        // Autostart at login. The mechanism is per-platform: a LaunchAgent on
+        // macOS, the xdg-desktop Background portal under Flatpak (the sandbox
+        // can't write the host's autostart dir), an XDG autostart .desktop on a
+        // native Linux install.
         public void set_autostart (bool on) {
+#if DARWIN
+            set_autostart_launchagent (on);
+#else
+            if (Platform.get_default ().delivery == DeliveryKind.FLATPAK)
+                request_background_autostart (on);
+            else
+                set_autostart_xdg (on);
+#endif
+        }
+
+        public bool is_autostart () {
+#if DARWIN
+            return FileUtils.test (launchagent_file (), FileTest.EXISTS);
+#else
+            // The portal offers no query; reflect the stored preference.
+            if (Platform.get_default ().delivery == DeliveryKind.FLATPAK)
+                return Config.load ().autostart;
+            return FileUtils.test (autostart_file (), FileTest.EXISTS);
+#endif
+        }
+
+#if DARWIN
+        static string launchagent_file () {
+            return Path.build_filename (Environment.get_home_dir (),
+                "Library", "LaunchAgents", Build.DAEMON_ID + ".plist");
+        }
+
+        // Run the bundle launcher (it sets the GTK runtime env, then exec's the
+        // real binary) as a per-user agent; RunAtLoad starts the proxy at login.
+        void set_autostart_launchagent (bool on) {
+            var path = launchagent_file ();
+            if (on) {
+                DirUtils.create_with_parents (Path.get_dirname (path), 0755);
+                var launcher = Path.build_filename (
+                    Path.get_dirname (daemon_exec ()), "launcher");
+                var plist =
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                    "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n" +
+                    "<plist version=\"1.0\"><dict>\n" +
+                    "  <key>Label</key><string>%s</string>\n".printf (Build.DAEMON_ID) +
+                    "  <key>ProgramArguments</key><array><string>%s</string><string>--daemon</string></array>\n".printf (launcher) +
+                    "  <key>RunAtLoad</key><true/>\n" +
+                    "</dict></plist>\n";
+                try { FileUtils.set_contents (path, plist); }
+                catch (Error e) { warning ("launchagent write failed: %s", e.message); }
+                launchctl ("load", path);
+            } else {
+                launchctl ("unload", path);
+                FileUtils.unlink (path);
+            }
+        }
+
+        static void launchctl (string verb, string plist) {
+            try {
+                new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE,
+                                "launchctl", verb, "-w", plist);
+            } catch (Error e) { /* best effort; RunAtLoad applies next login */ }
+        }
+#else
+        void set_autostart_xdg (bool on) {
             var path = autostart_file ();
             if (on) {
                 DirUtils.create_with_parents (
@@ -274,9 +332,37 @@ namespace TgWsProxy {
             }
         }
 
-        public bool is_autostart () {
-            return FileUtils.test (autostart_file (), FileTest.EXISTS);
+        static string autostart_file () {
+            return Path.build_filename (Environment.get_user_config_dir (),
+                                        "autostart", Build.DAEMON_ID + ".desktop");
         }
+
+        // Flatpak: the host autostart dir is outside the sandbox; ask the
+        // xdg-desktop Background portal to register/clear an autostart entry that
+        // launches the app in --daemon mode.
+        void request_background_autostart (bool on) {
+            try {
+                var conn = Bus.get_sync (BusType.SESSION);
+                var opts = new VariantBuilder (new VariantType ("a{sv}"));
+                opts.add ("{sv}", "reason", new Variant.string (
+                    _("Run the proxy in the background at login")));
+                opts.add ("{sv}", "autostart", new Variant.boolean (on));
+                opts.add ("{sv}", "background", new Variant.boolean (on));
+                opts.add ("{sv}", "commandline",
+                    new Variant.strv ({ Build.GETTEXT_PACKAGE, "--daemon" }));
+                opts.add ("{sv}", "dbus-activatable", new Variant.boolean (false));
+                conn.call.begin (
+                    "org.freedesktop.portal.Desktop",
+                    "/org/freedesktop/portal/desktop",
+                    "org.freedesktop.portal.Background",
+                    "RequestBackground",
+                    new Variant ("(sa{sv})", "", opts),
+                    new VariantType ("(o)"), DBusCallFlags.NONE, -1, null);
+            } catch (Error e) {
+                warning ("background portal autostart failed: %s", e.message);
+            }
+        }
+#endif
 
         static string daemon_exec () {
             // The macOS .app launcher exports the real binary path (there is no
