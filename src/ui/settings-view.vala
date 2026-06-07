@@ -61,6 +61,9 @@ namespace TgWsProxy {
             status_display_group.visible = false;
             status_text_group.visible = true;
             notif_settings_row.visible = true;
+            // No login autostart on Android (the engine is tied to the activity
+            // process; a headless boot service is out of scope) — hide the toggle.
+            autostart_row.visible = false;
             notif_settings_row.activated.connect (() => {
                 var win = get_root () as Gtk.Window;
                 if (win == null) return;
