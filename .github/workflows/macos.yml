@@ -20,12 +20,15 @@ permissions:
   contents: write
 
 jobs:
-  # Apple Silicon only: the Intel (macos-13) runners are gone, and a Homebrew
-  # build can't be lipo'd universal (the deps are single-arch), so we ship arm64.
+  # Both Mac architectures from one Apple-Silicon runner: arm64 builds natively;
+  # x86_64 builds under Rosetta against a parallel Intel Homebrew in /usr/local
+  # (the Intel runners are gone and the deps are single-arch, so no universal lipo).
   build:
     runs-on: macos-15
-    env:
-      arch: arm64
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
     steps:
       - name: Checkout GUI
         uses: actions/checkout@v4
@@ -40,9 +43,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/Homebrew
-          key: brew-macos-${{ env.arch }}-${{ hashFiles('.github/workflows/macos.yml') }}
+          key: brew-macos-${{ matrix.arch }}-${{ hashFiles('.github/workflows/macos.yml') }}
 
-      - name: Install dependencies
+      # ---- arm64: native Homebrew (/opt/homebrew) ----
+      - name: Install dependencies (arm64)
+        if: matrix.arch == 'arm64'
         run: |
           brew update --quiet || true
           brew install \
@@ -53,15 +58,38 @@ jobs:
             adwaita-icon-theme librsvg \
             dylibbundler create-dmg desktop-file-utils
 
-      - name: Build app + bundle .app/.dmg
+      - name: Build app + bundle .app/.dmg (arm64)
+        if: matrix.arch == 'arm64'
         env:
           CORE_SRC: _core
         run: bash packaging/macos/bundle-macos.sh
 
+      # ---- x86_64: Rosetta + Intel Homebrew (/usr/local), whole build emulated ----
+      - name: Install Rosetta + Intel Homebrew (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: |
+          sudo softwareupdate --install-rosetta --agree-to-license
+          arch -x86_64 /bin/bash -c 'export NONINTERACTIVE=1; /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+          arch -x86_64 /usr/local/bin/brew update --quiet || true
+          arch -x86_64 /usr/local/bin/brew install \
+            meson ninja pkg-config \
+            vala blueprint-compiler \
+            gtk4 libadwaita json-glib \
+            openssl@3 gettext \
+            adwaita-icon-theme librsvg \
+            dylibbundler create-dmg desktop-file-utils
+
+      - name: Build app + bundle .app/.dmg (x86_64 under Rosetta)
+        if: matrix.arch == 'x86_64'
+        env:
+          CORE_SRC: _core
+        run: |
+          arch -x86_64 /bin/bash -c 'export PATH=/usr/local/bin:$PATH; CORE_SRC=_core bash packaging/macos/bundle-macos.sh'
+
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: another-tgproxy-macos-${{ env.arch }}
+          name: another-tgproxy-macos-${{ matrix.arch }}
           path: dist/*.dmg
           retention-days: 14
 
