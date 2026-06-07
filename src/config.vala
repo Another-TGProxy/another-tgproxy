@@ -186,6 +186,7 @@ namespace TgWsProxy {
                 if (d.strip () != "") e.add_worker_domain (d.strip ());
             e.set_fake_tls (fake_tls_domain.strip ());
             e.set_pool_size (pool_size);
+            e.set_verbose (verbose);
         }
     }
 }
