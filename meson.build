@@ -75,13 +75,15 @@ deps = [
   dependency('json-glib-1.0'),
   mtproxy_dep,
 ]
-# Cross-platform integration (tray, control IPC, shell helpers) from libstation,
-# always built from source as a subproject so each bundle ships it; its
-# dependency carries the Vala binding (libstation-1.vapi). Desktop-only: Android
-# is single-process (no daemon/tray) and can't cross-build the GIR/vapi.
-if host_machine.system() != 'android'
-  deps += dependency('station-1', fallback: ['libstation', 'station_dep'])
-endif
+# Cross-platform integration (tray, control IPC, shell helpers, and on Android the
+# background-operation backend) from libstation, built from source as a subproject
+# so every bundle ships it. Its Vala binding is a committed vapi located via the
+# `vapidir` dep variable (added to vala_extra below). introspection=disabled: the
+# app only needs the vapi, so the subproject skips GIR (and the g-ir-scanner dep).
+station_dep = dependency('station-1',
+  fallback: ['libstation', 'station_dep'],
+  default_options: ['introspection=disabled'])
+deps += station_dep
 # gio-unix (Unix sockets, GDesktopAppInfo) is Linux/macOS-only; Windows uses TCP
 # + token IPC and has no .desktop, all behind #if WINDOWS.
 if host_machine.system() != 'windows'
@@ -117,6 +119,18 @@ endif
 mtproxy_vapidir = mtproxy_dep.get_variable('vapidir', default_value: '')
 if mtproxy_vapidir != ''
   vala_extra += ['--vapidir', mtproxy_vapidir]
+endif
+
+# libstation's committed vapi (libstation-1.vapi; + the Gdk-typed Android extras
+# on Android). Located via the dep's vapidir variable (source dir as a subproject,
+# datadir when found via pkg-config).
+station_vapidir = station_dep.get_variable('vapidir', default_value: '')
+if station_vapidir != ''
+  vala_extra += ['--vapidir', station_vapidir]
+endif
+vala_extra += ['--pkg', 'libstation-1']
+if host_machine.system() == 'android'
+  vala_extra += ['--pkg', 'libstation-android-1']
 endif
 
 blueprint_compiler = find_program('blueprint-compiler')
@@ -161,11 +175,10 @@ if host_machine.system() != 'android'
   )
 endif
 
-# Platform-specific extras. The tray, control IPC and shell helpers now come from
-# libstation (one Vala API, native backends inside the lib), so the macOS/Windows
-# C/Obj-C glue is gone; only the Windows icon resource and the Android JNI glue
-# remain app-specific.
-android_sources = []
+# Platform-specific extras. The tray, control IPC, shell helpers and the Android
+# background-operation backend now all come from libstation (one Vala API, native
+# backends inside the lib), so the macOS/Windows/Android C/Obj-C/JNI glue is gone;
+# only the Windows icon resource remains app-specific.
 win_sources = []
 extra_deps = []
 extra_link_args = []
@@ -177,10 +190,6 @@ if host_machine.system() == 'windows'
   win_sources = windows_mod.compile_resources('data/windows/another-tgproxy.rc',
     include_directories: include_directories('data/windows'),
     depend_files: files('data/windows/another-tgproxy.ico'))
-elif host_machine.system() == 'android'
-  # C glue over the gdk-android public API (battery-optimization exemption, …).
-  android_sources = files('src/android/android_bridge.c', 'src/android/android_bridge.vapi')
-  inc_dirs += 'src/android'
 endif
 
 # android_exe_type is a Pixiewood meson-fork kwarg; only pass it when targeting
@@ -194,7 +203,7 @@ elif host_machine.system() == 'windows'
 endif
 
 executable('another-tgproxy',
-  sources, android_sources, win_sources, config_h, resources,
+  sources, win_sources, config_h, resources,
   dependencies: deps + extra_deps,
   vala_args: vala_extra,
   c_args: ['-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name())],

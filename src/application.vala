@@ -75,11 +75,13 @@ namespace TgWsProxy {
             if (android_wired) return;
             android_wired = true;
             android_self = this;
-            TgwsAndroid.set_resume_handler (android_resume);
+            Station.android_set_resume_handler (android_resume);
             win.map.connect (() => {
                 var surface = win.get_surface ();
                 if (surface == null) return;
-                TgwsAndroid.bind_notification (surface);
+                Station.android_foreground_bind (surface,
+                    "space.ampernic.anothertgproxy.ProxyApplication",
+                    "space.ampernic.anothertgproxy.ProxyService");
                 check_battery (win);
             });
         }
@@ -95,7 +97,7 @@ namespace TgWsProxy {
             if (battery_dialog_open) return;
             var surface = win.get_surface ();
             if (surface == null) return;
-            if (TgwsAndroid.is_ignoring_battery_optimizations (surface)) return;
+            if (Station.android_battery_unrestricted (surface)) return;
             show_battery_dialog (win, surface);
         }
 
@@ -111,7 +113,7 @@ namespace TgWsProxy {
             dialog.response.connect ((resp) => {
                 battery_dialog_open = false;
                 if (resp == "settings")
-                    TgwsAndroid.request_ignore_battery_optimizations (surface);
+                    Station.android_request_battery_unrestricted (surface);
             });
             dialog.present (win);
         }

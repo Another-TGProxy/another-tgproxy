@@ -68,7 +68,7 @@ namespace TgWsProxy {
                 var win = get_root () as Gtk.Window;
                 if (win == null) return;
                 var surface = win.get_surface ();
-                if (surface != null) TgwsAndroid.open_notification_settings (surface);
+                if (surface != null) Station.android_open_notification_settings (surface);
             });
 #else
             notif_settings_row.visible = false;

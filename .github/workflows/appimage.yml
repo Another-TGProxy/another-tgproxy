@@ -30,7 +30,6 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential meson ninja-build valac blueprint-compiler gettext \
-            gobject-introspection libgirepository1.0-dev \
             pkg-config git wget ca-certificates file desktop-file-utils patchelf \
             libgtk-4-dev libadwaita-1-dev libjson-glib-dev libssl-dev \
             libglib2.0-dev libglib2.0-bin \

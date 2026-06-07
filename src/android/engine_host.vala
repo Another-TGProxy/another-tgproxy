@@ -94,7 +94,7 @@ namespace TgWsProxy {
                 : _("Proxy stopped");
             if (text != last_notif) {
                 last_notif = text;
-                TgwsAndroid.set_notification_text (text);
+                Station.android_foreground_set_text (text);
             }
         }
     }
