@@ -68,16 +68,20 @@ jobs:
       - name: Install Rosetta + Intel Homebrew (x86_64)
         if: matrix.arch == 'x86_64'
         run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ENV_HINTS=1
           sudo softwareupdate --install-rosetta --agree-to-license
           arch -x86_64 /bin/bash -c 'export NONINTERACTIVE=1; /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
           arch -x86_64 /usr/local/bin/brew update --quiet || true
+          # `|| true`: a non-fatal link conflict on an unrelated dep (the runner
+          # already has python in /usr/local) must not abort; the libs we link
+          # against still pour, and the build step surfaces any real miss.
           arch -x86_64 /usr/local/bin/brew install \
             meson ninja pkg-config \
             vala blueprint-compiler \
             gtk4 libadwaita json-glib \
             openssl@3 gettext \
             adwaita-icon-theme librsvg \
-            dylibbundler create-dmg desktop-file-utils
+            dylibbundler create-dmg desktop-file-utils || true
 
       - name: Build app + bundle .app/.dmg (x86_64 under Rosetta)
         if: matrix.arch == 'x86_64'
