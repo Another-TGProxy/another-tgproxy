@@ -24,7 +24,10 @@ ShowUninstDetails show
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
+; English first = fallback for unmatched systems; MUI auto-selects by the user's
+; system UI language at runtime, so a Russian Windows gets the Russian installer.
 !insertmacro MUI_LANGUAGE "English"
+!insertmacro MUI_LANGUAGE "Russian"
 
 Section "Install"
   SetOutPath "$INSTDIR"
