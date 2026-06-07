@@ -94,6 +94,33 @@ tray_popup (TgwsTray *t)
     t->cb (action, t->user);
 }
 
+/* Make the context menu follow the system light/dark theme. Classic Win32 menus
+ * stay light unless the process opts into dark mode via these undocumented (but
+ * widely used) uxtheme exports; missing on older Windows, where we just skip. */
+static void
+tray_enable_dark (HWND hwnd)
+{
+  HMODULE ux = LoadLibraryExW (L"uxtheme.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+  if (ux == NULL)
+    return;
+  typedef int (WINAPI * SetPreferredAppMode_t) (int);
+  typedef BOOL (WINAPI * AllowDarkModeForWindow_t) (HWND, BOOL);
+  typedef void (WINAPI * FlushMenuThemes_t) (void);
+  SetPreferredAppMode_t set_mode =
+      (SetPreferredAppMode_t) (void *) GetProcAddress (ux, MAKEINTRESOURCEA (135));
+  AllowDarkModeForWindow_t allow_win =
+      (AllowDarkModeForWindow_t) (void *) GetProcAddress (ux, MAKEINTRESOURCEA (133));
+  FlushMenuThemes_t flush =
+      (FlushMenuThemes_t) (void *) GetProcAddress (ux, MAKEINTRESOURCEA (136));
+  if (set_mode != NULL)
+    set_mode (1); /* AllowDark: follow the system theme */
+  if (allow_win != NULL)
+    allow_win (hwnd, TRUE);
+  if (flush != NULL)
+    flush ();
+  /* Keep uxtheme loaded so the menu theme persists. */
+}
+
 static LRESULT CALLBACK
 tray_wndproc (HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -160,6 +187,7 @@ tgws_tray_new (TgwsTrayCb cb, void *user_data,
     return NULL;
   }
   SetWindowLongPtrW (t->hwnd, GWLP_USERDATA, (LONG_PTR) t);
+  tray_enable_dark (t->hwnd);
 
   t->nid.cbSize = sizeof (t->nid);
   t->nid.hWnd = t->hwnd;
