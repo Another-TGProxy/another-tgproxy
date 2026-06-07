@@ -1,4 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Use the wide Win32 API: the generic macros (IDI_APPLICATION, MAKEINTRESOURCE,
+ * …) then resolve to their W forms, matching the explicit *W calls below. */
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _UNICODE
+#define _UNICODE
+#endif
 #include "win_compat.h"
 #include <windows.h>
 #include <shellapi.h>
