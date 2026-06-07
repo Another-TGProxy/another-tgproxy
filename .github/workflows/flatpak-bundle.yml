@@ -30,15 +30,25 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Render manifest (pin core + gui commits)
+        env:
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
           set -euo pipefail
           CORE=https://github.com/Another-TGProxy/mtproxy-ws.git
           CORE_COMMIT=$(git ls-remote "$CORE" refs/heads/main | cut -f1)
+          VERSION="${RELEASE_VERSION#v}"
+          [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+          # Inject the displayed version into the gui module, or drop the placeholder.
+          if [ -n "${RELEASE_VERSION:-}" ]; then
+            VOPT="s|__GUI_VERSION_OPT__|-Drelease_version=$VERSION|g"
+          else
+            VOPT="/__GUI_VERSION_OPT__/d"
+          fi
           sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
               -e "s/__GUI_COMMIT__/${{ github.sha }}/g" \
+              -e "$VOPT" \
               packaging/flatpak/space.ampernic.AnotherTGProxy.yml \
               > packaging/flatpak/_rendered.yml
-          VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
           echo "BUNDLE=AnotherTGProxy-$VERSION-linux-x86_64.flatpak" >> "$GITHUB_ENV"
 
       - name: Build .flatpak bundle

@@ -38,6 +38,7 @@ modules:
     buildsystem: meson
     config-opts:
       - --buildtype=release
+      - __GUI_VERSION_OPT__   # CI replaces with -Drelease_version=<tag>, or drops it
     sources:
       - type: git
         url: https://github.com/Another-TGProxy/another-tgproxy.git

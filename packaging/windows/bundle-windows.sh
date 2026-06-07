@@ -31,8 +31,12 @@ meson setup "$CORE_SRC/_b" "$CORE_SRC" --prefix="$STAGE" --buildtype=release -Ds
 meson install -C "$CORE_SRC/_b"
 
 info "Building gui (another-tgproxy)..."
+# Displayed/file version: the release tag (RELEASE_VERSION, set by CI on a tag,
+# leading "v" stripped) else the meson.build project version.
+VERSION="${RELEASE_VERSION#v}"
+[ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
 export PKG_CONFIG_PATH="$STAGE/lib/pkgconfig:$STAGE/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
-meson setup build --prefix="$STAGE" --buildtype=release
+meson setup build --prefix="$STAGE" --buildtype=release -Drelease_version="$VERSION"
 meson install -C build
 
 # -- 2. Portable tree: bin/ (exe + DLLs), lib/, share/ ------------------------
@@ -109,9 +113,8 @@ for ca in "$PREFIX/ssl/certs/ca-bundle.crt" "$PREFIX/etc/ssl/certs/ca-bundle.crt
   if [ -f "$ca" ]; then cp "$ca" "$DIST/bin/ssl/certs/ca-bundle.crt"; break; fi
 done
 
-# -- 8. Installers ------------------------------------------------------------
-# Naming: AnotherTGProxy-<version>-windows-x86_64-{setup,portable}.exe
-VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+# -- 8. Installer -------------------------------------------------------------
+# Naming: AnotherTGProxy-<version>-windows-x86_64-setup.exe ($VERSION from above).
 BASE="AnotherTGProxy-${VERSION:-0}-windows-x86_64"
 ICON="$PWD/data/windows/another-tgproxy.ico"
 

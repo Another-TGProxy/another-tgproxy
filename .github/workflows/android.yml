@@ -35,6 +35,7 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -206,7 +207,8 @@ jobs:
         if: always()
         run: |
           mkdir -p "$GITHUB_WORKSPACE/android-apks"
-          VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+          VERSION="${RELEASE_VERSION#v}"
+          [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
           # Prefer the signed release APKs; fall back to whatever was built (debug).
           apks="$(find .pixiewood -path '*/release/*-release.apk' 2>/dev/null || true)"
           [ -n "$apks" ] || apks="$(find . -name '*.apk' ! -name '*-unsigned.apk')"

@@ -65,6 +65,7 @@ jobs:
         env:
           CORE_SRC: _core
           MAKENSIS: /c/Program Files (x86)/NSIS/makensis.exe
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: bash packaging/windows/bundle-windows.sh
 
       - name: Upload installer

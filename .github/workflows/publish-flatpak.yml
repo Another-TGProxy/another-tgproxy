@@ -49,6 +49,7 @@ jobs:
 
           sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
               -e "s/__GUI_COMMIT__/$GUI_COMMIT/g" \
+              -e "/__GUI_VERSION_OPT__/d" \
               packaging/flatpak/space.ampernic.AnotherTGProxy.yml > manifest.yml
 
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"

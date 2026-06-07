@@ -30,13 +30,20 @@ if get_option('profile') == 'development'
   localedir = meson.project_build_root() / 'po'
 endif
 
+# Displayed version: a release tag (e.g. 2.0.0-beta1) passed by CI via
+# -Drelease_version, else the project version from meson.build.
+app_version = meson.project_version()
+if get_option('release_version') != ''
+  app_version = get_option('release_version')
+endif
+
 conf = configuration_data()
 conf.set_quoted('APP_ID', app_id)
 conf.set_quoted('APP_ID_RELEVANT', app_id_relevant)
 conf.set_quoted('DAEMON_ID', app_id_relevant + '.Daemon')
 conf.set_quoted('APP_NAME', app_name)
 conf.set_quoted('APP_DIRNAME', app_dirname)
-conf.set_quoted('VERSION', meson.project_version())
+conf.set_quoted('VERSION', app_version)
 conf.set_quoted('OS', host_machine.system())
 conf.set_quoted('GETTEXT_PACKAGE', meson.project_name())
 conf.set_quoted('LOCALEDIR', localedir)

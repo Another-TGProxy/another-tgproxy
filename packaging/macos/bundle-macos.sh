@@ -61,7 +61,11 @@ meson setup "$CORE_SRC/_b" "$CORE_SRC" --prefix="$INSTALL" --buildtype=release -
 meson install -C "$CORE_SRC/_b"
 
 info "Building gui (another-tgproxy)..."
-meson setup build --prefix="$INSTALL" --buildtype=release
+# Displayed/file version: the release tag (RELEASE_VERSION, set by CI on a tag,
+# leading "v" stripped) else the meson.build project version.
+APP_VERSION="${RELEASE_VERSION#v}"
+[ -n "$APP_VERSION" ] || APP_VERSION="$(awk -F\' '/version:/{print $2; exit}' meson.build)"
+meson setup build --prefix="$INSTALL" --buildtype=release -Drelease_version="$APP_VERSION"
 meson install -C build
 
 # -- 2. .app skeleton ---------------------------------------------------------
@@ -164,9 +168,11 @@ iconutil -c icns "$ICONSET" -o "$RES/$BIN.icns"
 rm -rf "$ICONSET"
 
 # -- 7. Info.plist (from template) + launcher (static) -------------------------
-APP_VERSION="$(awk -F\' '/version:/{print $2; exit}' meson.build)"
+# CFBundleShortVersionString must stay numeric (Apple rejects a -beta suffix), so
+# the plist uses the project version; the About dialog + dmg name use APP_VERSION.
+PLIST_VERSION="$(awk -F\' '/version:/{print $2; exit}' meson.build)"
 sed -e "s|@APP_NAME@|$APP_NAME|g" -e "s|@APP_ID@|$APP_ID|g" \
-    -e "s|@VERSION@|$APP_VERSION|g" -e "s|@BIN@|$BIN|g" \
+    -e "s|@VERSION@|$PLIST_VERSION|g" -e "s|@BIN@|$BIN|g" \
     "$SELF/Info.plist.in" > "$CONTENTS/Info.plist"
 
 install -m 0755 "$SELF/launcher" "$MACOS/launcher"
