@@ -22,6 +22,18 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    # Authenticode signing via SignPath (free for OSS). Active only when the
+    # SignPath secrets are configured AND this is a release tag, so ordinary
+    # branch/PR builds stay green and unsigned. One-time setup on signpath.io:
+    #   1. Create an org under the SignPath Foundation OSS program; install the
+    #      SignPath GitHub App on this repo.
+    #   2. Create a Project "another-tgproxy", an Artifact Configuration for the
+    #      uploaded .exe, and a "release-signing" Signing Policy.
+    #   3. Add repo secret SIGNPATH_API_TOKEN (a CI user token) + repo variable
+    #      SIGNPATH_ORGANIZATION_ID. project-slug / signing-policy-slug below must
+    #      match what you named in SignPath.
+    env:
+      SIGN: ${{ secrets.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/') }}
     defaults:
       run:
         shell: msys2 {0}
@@ -70,11 +82,32 @@ jobs:
         run: bash packaging/windows/bundle-windows.sh
 
       - name: Upload installer
+        id: upload
         uses: actions/upload-artifact@v4
         with:
           name: another-tgproxy-windows-x86_64
           path: AnotherTGProxy-*-windows-x86_64-setup.exe
           retention-days: 14
+
+      # SignPath pulls the uploaded artifact, Authenticode-signs it and returns
+      # the signed installer; only runs on a release tag with secrets configured.
+      - name: Sign installer (SignPath)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          project-slug: another-tgproxy
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Use the signed installer for the release
+        if: env.SIGN == 'true'
+        shell: bash
+        run: cp -f signed/AnotherTGProxy-*-windows-x86_64-setup.exe ./
 
       - name: Release on tag
         if: startsWith(github.ref, 'refs/tags/')
