@@ -31,16 +31,16 @@ jobs:
         arch: [arm64, x86_64]
     steps:
       - name: Checkout GUI
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout core (mtproxy-ws)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: Another-TGProxy/mtproxy-ws
           path: _core
 
       - name: Cache Homebrew downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/Library/Caches/Homebrew
           key: brew-macos-${{ matrix.arch }}-${{ hashFiles('.github/workflows/macos.yml') }}
@@ -93,7 +93,7 @@ jobs:
           arch -x86_64 /bin/bash -c 'export PATH=/usr/local/bin:$PATH RELEASE_VERSION='"'$RELEASE_VERSION'"'; CORE_SRC=_core bash packaging/macos/bundle-macos.sh'
 
       - name: Upload DMG
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: another-tgproxy-macos-${{ matrix.arch }}
           path: dist/*.dmg

@@ -22,30 +22,15 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    # Authenticode signing via SignPath (free for OSS). Active only when the
-    # SignPath secrets are configured, on tags + main/devel pushes (not PRs or
-    # feature branches, to spare the OSS quota), so other builds stay green and
-    # unsigned. Tags use the release policy, branch builds the test policy.
-    # One-time setup on signpath.io:
-    #   1. Create an org under the SignPath Foundation OSS program; install the
-    #      SignPath GitHub App on this repo.
-    #   2. Create a Project "another-tgproxy", an Artifact Configuration for the
-    #      uploaded .exe, and two Signing Policies: "release-signing" and
-    #      "test-signing".
-    #   3. Add repo secret SIGNPATH_API_TOKEN (a CI user token) + repo variable
-    #      SIGNPATH_ORGANIZATION_ID. project-slug / policy slugs below must match
-    #      what you named in SignPath.
-    env:
-      SIGN: ${{ secrets.SIGNPATH_API_TOKEN != '' && github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel') }}
     defaults:
       run:
         shell: msys2 {0}
     steps:
       - name: Checkout GUI
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout core (mtproxy-ws)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: Another-TGProxy/mtproxy-ws
           path: _core
@@ -87,7 +72,7 @@ jobs:
       # Upload the unsigned build as the input SignPath signs from.
       - name: Upload unsigned installer (SignPath input)
         id: upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: installer-unsigned
           path: AnotherTGProxy-*-windows-x86_64-setup.exe
@@ -122,7 +107,7 @@ jobs:
           fi
 
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: another-tgproxy-windows-x86_64
           path: dist/*.exe
