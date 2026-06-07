@@ -47,7 +47,7 @@ namespace TgWsProxy {
             verbose_row.active = cfg.verbose;
             autostart_row.active = service.is_autostart ();
             updates_row.active = cfg.check_updates;
-            updates_row.visible = UpdateChecker.relevant ();
+            updates_row.visible = Platform.get_default ().updates_relevant ();
             status_row.text = cfg.status_template;
 
             regen_btn.clicked.connect (() => { secret_row.text = Config.gen_secret (); });

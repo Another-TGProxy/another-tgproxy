@@ -157,7 +157,6 @@ sources = files(
   'src/ipc.vala',
   'src/logging.vala',
   'src/platform.vala',
-  'src/updates.vala',         # GitHub-releases update notifier (win/mac/android)
   'src/engine-runner.vala',   # shared engine lifecycle (daemon + Android host)
   'src/ui/window.vala',
   'src/ui/home-view.vala',
