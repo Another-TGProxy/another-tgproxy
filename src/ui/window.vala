@@ -47,6 +47,14 @@ namespace TgWsProxy {
             client.start ();
         }
 
+        // On macOS/Windows the app lives on in the tray after the window is
+        // destroyed; stop this window's control client so its reconnect loop and
+        // socket don't linger until finalization.
+        public override void dispose () {
+            if (client != null) client.stop ();
+            base.dispose ();
+        }
+
         private void toast (string msg) {
             toast_overlay.add_toast (new Adw.Toast (msg) { timeout = 2 });
         }

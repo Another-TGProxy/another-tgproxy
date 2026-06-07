@@ -35,14 +35,16 @@ namespace TgWsProxy {
                 return false;
             }
             last_error = "";
-            message ("proxy started: tg://proxy?server=%s&port=%d&secret=dd%s",
-                     cfg.host, cfg.port, cfg.secret);
+            // Don't log the secret — proxy.log is shown in the LogView and may be
+            // attached to bug reports; the secret is effectively a password.
+            message ("proxy started on %s:%d", cfg.host, cfg.port);
             return true;
         }
 
         public void stop () {
             if (engine != null) {
                 engine.stop ();
+                sweep_retired ();
                 retired.add ((owned) engine);
                 engine = null;
             }
@@ -53,7 +55,20 @@ namespace TgWsProxy {
             return start ();
         }
 
+        // A stopped engine is parked in `retired` because its detached bridge
+        // threads may still touch it; they drain within ~1s of stop() (the listen
+        // fd is closed and the per-conn poll times out), after which active==0 and
+        // it's safe to drop. Reclaim drained ones so the list can't grow without
+        // bound over a long-lived daemon that's reloaded repeatedly.
+        void sweep_retired () {
+            for (int i = (int) retired.length - 1; i >= 0; i--) {
+                if (retired[i].connections_active () == 0)
+                    retired.remove_index (i);
+            }
+        }
+
         public Status snapshot () {
+            sweep_retired ();
             var s = new Status ();
             s.host = cfg.host;
             s.port = cfg.port;

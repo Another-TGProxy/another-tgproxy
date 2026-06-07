@@ -10,13 +10,22 @@ namespace TgWsProxy {
 #if ANDROID
         // Single-process on Android: the "control channel" is the in-process
         // EngineHost rather than a Unix socket to a separate daemon.
+        ulong host_handler = 0;
         public void start () {
+            if (host_handler != 0) return;   // EngineHost is a singleton; bind once
             var h = EngineHost.instance ();
-            h.status_changed.connect ((s) => status_changed (s));
+            host_handler = h.status_changed.connect ((s) => status_changed (s));
             connection_changed (true);
             status_changed (h.snapshot ());
         }
-        public void stop () { }
+        public void stop () {
+            // Drop our handler so the process-global singleton doesn't keep firing
+            // into a dead client after the window/controller is gone.
+            if (host_handler != 0) {
+                EngineHost.instance ().disconnect (host_handler);
+                host_handler = 0;
+            }
+        }
         public void send (string cmd) {
             var h = EngineHost.instance ();
             if (cmd == "stop") h.stop ();

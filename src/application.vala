@@ -82,6 +82,9 @@ namespace TgWsProxy {
                 Station.android_foreground_bind (surface,
                     "space.ampernic.anothertgproxy.ProxyApplication",
                     "space.ampernic.anothertgproxy.ProxyService");
+                // Android 13+: the foreground-service notification (our status
+                // display) needs the POST_NOTIFICATIONS runtime grant.
+                Station.android_request_notification_permission (surface);
                 check_battery (win);
             });
         }

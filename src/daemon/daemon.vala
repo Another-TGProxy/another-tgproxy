@@ -10,6 +10,9 @@ namespace TgWsProxy {
         TrayController? tray = null;
         Control? control_dbus = null;
         StatusMode current_mode = StatusMode.WINDOW;
+        bool quitting = false;
+        uint status_timer = 0;
+        string last_portal_msg = "";
 
         public Daemon () {
             Object (
@@ -125,7 +128,13 @@ namespace TgWsProxy {
 
         // Push the live status to every active presenter.
         void publish_status () {
-            if (current_mode == StatusMode.BACKGROUND_PORTAL) portal_set_status ();
+            if (current_mode == StatusMode.BACKGROUND_PORTAL) {
+                var msg = status_message ();
+                if (msg != last_portal_msg) {   // skip the D-Bus call when unchanged
+                    last_portal_msg = msg;
+                    portal_set_status (msg);
+                }
+            }
             if (tray != null) tray.update (status_message (), runner.running);
             if (control_dbus != null) {
                 bool r = runner.running;
@@ -135,11 +144,10 @@ namespace TgWsProxy {
             }
         }
 
-        void portal_set_status () {
+        void portal_set_status (string msg) {
             if (!is_sandboxed ()) return;
             var conn = get_dbus_connection ();
             if (conn == null) return;
-            string msg = status_message ();
             var b = new VariantBuilder (new VariantType ("a{sv}"));
             b.add ("{sv}", "message", new Variant.string (msg));
             conn.call.begin (
@@ -205,7 +213,7 @@ namespace TgWsProxy {
             setup_control ();
             reconcile_status_mode ();
             publish_status ();
-            Timeout.add_seconds (2, () => {
+            status_timer = Timeout.add_seconds (2, () => {
                 push_status_all ();
                 publish_status ();
                 return Source.CONTINUE;
@@ -222,6 +230,7 @@ namespace TgWsProxy {
         }
 
         public override void shutdown () {
+            if (status_timer != 0) { Source.remove (status_timer); status_timer = 0; }
             runner.stop ();
             if (control != null) { control.stop (); control = null; }
             cleanup_control ();
@@ -237,6 +246,12 @@ namespace TgWsProxy {
         }
 
         void do_quit () {
+            // Reachable from SIGTERM/SIGINT, the "stop" IPC command, the quit
+            // action and the tray — guard so a second trigger doesn't unbalance
+            // hold()/release() or quit() twice.
+            if (quitting) return;
+            quitting = true;
+            if (status_timer != 0) { Source.remove (status_timer); status_timer = 0; }
             runner.stop ();
             if (tray != null) { tray.close (); tray = null; }
             if (control != null) { control.stop (); control = null; }

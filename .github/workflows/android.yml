@@ -4,8 +4,7 @@ name: Android (experimental)
 # (mtproxy-ws, pulled as a meson subproject) runs in the GUI process — no daemon,
 # D-Bus or tray (those Vala paths are behind #if !ANDROID). OpenSSL, which the core
 # links for the outbound wss:// TLS, is cross-built static and staged into the NDK
-# sysroot. The minimal demo under packaging/android/{demo,vala-demo} stays as a
-# known-good toolchain reference (build it manually with the steps below).
+# sysroot.
 on:
   workflow_dispatch:
   push:
