@@ -147,6 +147,18 @@ msgstr "Прочее"
 msgid "Write log to file"
 msgstr "Писать лог в файл"
 
+msgid "Download"
+msgstr "Скачать"
+
+msgid "Update available: %s"
+msgstr "Доступно обновление: %s"
+
+msgid "Check for updates"
+msgstr "Проверять обновления"
+
+msgid "Notify when a newer release is available"
+msgstr "Уведомлять о выходе новой версии"
+
 msgid "Verbose log"
 msgstr "Подробный лог"
 
