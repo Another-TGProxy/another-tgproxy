@@ -147,6 +147,12 @@ msgstr "Прочее"
 msgid "Write log to file"
 msgstr "Писать лог в файл"
 
+msgid "Verbose log"
+msgstr "Подробный лог"
+
+msgid "Log per-connection routing and handshake details"
+msgstr "Записывать маршрутизацию и рукопожатие по каждому соединению"
+
 msgid "Autostart at login"
 msgstr "Автозапуск при входе"
 

@@ -14,6 +14,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.SwitchRow verify_cf_row;
         [GtkChild] private unowned Adw.SpinRow pool_row;
         [GtkChild] private unowned Adw.SwitchRow logfile_row;
+        [GtkChild] private unowned Adw.SwitchRow verbose_row;
         [GtkChild] private unowned Adw.SwitchRow autostart_row;
         [GtkChild] private unowned Adw.PreferencesGroup status_display_group;
         [GtkChild] private unowned Adw.ToggleGroup status_mode_group;
@@ -42,6 +43,7 @@ namespace TgWsProxy {
             verify_cf_banner.revealed = !cfg.verify_cf;
             pool_row.value = cfg.pool_size;
             logfile_row.active = cfg.log_to_file;
+            verbose_row.active = cfg.verbose;
             autostart_row.active = service.is_autostart ();
             status_row.text = cfg.status_template;
 
@@ -109,6 +111,7 @@ namespace TgWsProxy {
             cfg.verify_cf = verify_cf_row.active;
             cfg.pool_size = (int) pool_row.value;
             cfg.log_to_file = logfile_row.active;
+            cfg.verbose = verbose_row.active;
             cfg.autostart = autostart_row.active;
             if (status_row.text.strip () != "") cfg.status_template = status_row.text.strip ();
             cfg.status_mode = status_mode_group.active_name ?? "auto";

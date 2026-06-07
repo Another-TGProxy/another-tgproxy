@@ -75,6 +75,11 @@ template $TgWsProxySettingsView : Adw.Bin {
           title: _("Write log to file");
         }
 
+        Adw.SwitchRow verbose_row {
+          title: _("Verbose log");
+          subtitle: _("Log per-connection routing and handshake details");
+        }
+
         Adw.SwitchRow autostart_row {
           title: _("Autostart at login");
         }
