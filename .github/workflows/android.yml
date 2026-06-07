@@ -19,7 +19,7 @@ on:
       - '.github/workflows/android.yml'
 
 permissions:
-  contents: read
+  contents: write   # attach the APK to the release on tag
 
 env:
   OPENSSL_BRANCH: openssl-3.3
@@ -28,6 +28,13 @@ env:
 jobs:
   app-apk:
     runs-on: ubuntu-latest
+    # Release signing: set these repo secrets to ship a release-signed APK;
+    # without them the build falls back to a debug APK (so PRs/forks stay green).
+    env:
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -149,18 +156,51 @@ jobs:
           # the Java sources, plus a manifest-merger overlay in the debug build-type
           # source set that gradle merges with Pixiewood's generated manifest.
           APP=.pixiewood/android/app
-          mkdir -p "$APP/src/main/java/space/ampernic/anothertgproxy" "$APP/src/debug"
+          mkdir -p "$APP/src/main/java/space/ampernic/anothertgproxy" "$APP/src/debug" "$APP/src/release"
           cp packaging/android/app/java/*.java "$APP/src/main/java/space/ampernic/anothertgproxy/"
+          # The overlay (ProxyApplication/ProxyService/perms) must merge into both
+          # build types' manifests, so install it in each build-type source set.
           cp packaging/android/app/AndroidManifest-overlay.xml "$APP/src/debug/AndroidManifest.xml"
-          perl "$PW" build
+          cp packaging/android/app/AndroidManifest-overlay.xml "$APP/src/release/AndroidManifest.xml"
+          if [ -n "${ANDROID_KEYSTORE_B64:-}" ]; then
+            echo "::notice::keystore secret present — building release APK"
+            ( cd .pixiewood/android && ./gradlew --no-daemon assembleRelease )
+          else
+            echo "::warning::no ANDROID_KEYSTORE_B64 — building a debug-signed APK"
+            perl "$PW" build
+          fi
+
+      - name: Sign release APKs
+        if: env.ANDROID_KEYSTORE_B64 != ''
+        run: |
+          set -e
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ks.jks"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          # Re-sign every release APK with our key (the generated project may have
+          # left it unsigned or debug-signed); normalise the name to *-release.apk.
+          for apk in $(find .pixiewood -path '*/release/*.apk'); do
+            out="${apk%-unsigned.apk}"; out="${out%.apk}.apk"
+            "$BT/zipalign" -p -f 4 "$apk" "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" sign --ks "$RUNNER_TEMP/ks.jks" \
+              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+              --out "$out" "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" verify --print-certs "$out" | head -1
+          done
+          rm -f "$RUNNER_TEMP/ks.jks" "$RUNNER_TEMP/aligned.apk"
 
       - name: Collect APKs
         if: always()
         run: |
           mkdir -p "$GITHUB_WORKSPACE/android-apks"
           VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+          # Prefer the signed release APKs; fall back to whatever was built (debug).
+          apks="$(find .pixiewood -path '*/release/*-release.apk' 2>/dev/null || true)"
+          [ -n "$apks" ] || apks="$(find . -name '*.apk' ! -name '*-unsigned.apk')"
           # Name: AnotherTGProxy-<version>-android-<abi>.apk
-          find . -name '*.apk' | while read -r apk; do
+          echo "$apks" | while read -r apk; do
+            [ -n "$apk" ] || continue
             case "$apk" in
               *arm64-v8a*)   abi=arm64-v8a ;;
               *armeabi-v7a*) abi=armeabi-v7a ;;
