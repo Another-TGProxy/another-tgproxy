@@ -189,6 +189,9 @@ jobs:
             cp packaging/android/app/foreground.xml "$resdir/drawable/ic_launcher_monochrome.xml"
             grep -q '<monochrome' "$aix" || sed -i \
               's#</adaptive-icon>#    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>\n</adaptive-icon>#' "$aix"
+            # Gradient background (like the desktop icon) instead of the flat colour.
+            cp packaging/android/app/ic_launcher_background.xml "$resdir/drawable/ic_launcher_background.xml"
+            sed -i 's#@color/ic_launcher_background#@drawable/ic_launcher_background#' "$aix"
           done
           echo "::group::launcher icon resources"
           find .pixiewood -path '*res*ic_launcher*' | sort
