@@ -146,6 +146,14 @@ jobs:
         run: |
           set -x
           PW="$RUNNER_TEMP/pw/pixiewood"
+          # Bake the release-tag version into meson_options.txt BEFORE Pixiewood
+          # configures meson (it does so at generate), so the About dialog shows it.
+          # Pixiewood drives meson itself, so we can't pass -Drelease_version.
+          VERSION="${RELEASE_VERSION#v}"
+          if [ -n "$VERSION" ]; then
+            sed -i "s|value: '',|value: '$VERSION',|" meson_options.txt
+            grep -n "release_version" -A2 meson_options.txt
+          fi
           # Run from the repo root: meson.build is here, so the manifest's src://
           # paths resolve against it.
           perl "$PW" prepare packaging/android/app/pixiewood.xml \
@@ -171,13 +179,6 @@ jobs:
             printf '\nandroid { packagingOptions { jniLibs { useLegacyPackaging true } } }\n' >> "$APP/build.gradle"
           elif [ -f "$APP/build.gradle.kts" ]; then
             printf '\nandroid { packaging { jniLibs { useLegacyPackaging = true } } }\n' >> "$APP/build.gradle.kts"
-          fi
-          # Pixiewood drives meson itself, so we can't pass -Drelease_version; bake
-          # the tag version as the option's default in meson_options.txt instead, so
-          # the About dialog shows it too (desktop passes it via -D).
-          VERSION="${RELEASE_VERSION#v}"
-          if [ -n "$VERSION" ]; then
-            sed -i "s|value: '',|value: '$VERSION',|" meson_options.txt
           fi
           # Themed (monochrome) launcher icon: Pixiewood emits no <monochrome>
           # layer, so add one to every adaptive-icon, reusing the foreground art as
