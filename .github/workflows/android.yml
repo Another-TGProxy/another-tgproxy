@@ -179,3 +179,10 @@ jobs:
           name: another-tgproxy-android
           path: android-apks/*.apk
           if-no-files-found: warn
+
+      - name: Release on tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android-apks/*.apk
+          prerelease: ${{ contains(github.ref_name, '-') }}

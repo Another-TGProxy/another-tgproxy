@@ -79,3 +79,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: AnotherTGProxy-*-windows-x86_64-setup.exe
+          prerelease: ${{ contains(github.ref_name, '-') }}
