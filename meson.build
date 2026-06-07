@@ -75,6 +75,13 @@ deps = [
   dependency('json-glib-1.0'),
   mtproxy_dep,
 ]
+# Cross-platform integration (tray, control IPC, shell helpers) from libstation,
+# always built from source as a subproject so each bundle ships it; its
+# dependency carries the Vala binding (libstation-1.vapi). Desktop-only: Android
+# is single-process (no daemon/tray) and can't cross-build the GIR/vapi.
+if host_machine.system() != 'android'
+  deps += dependency('station-1', fallback: ['libstation', 'station_dep'])
+endif
 # gio-unix (Unix sockets, GDesktopAppInfo) is Linux/macOS-only; Windows uses TCP
 # + token IPC and has no .desktop, all behind #if WINDOWS.
 if host_machine.system() != 'windows'
@@ -145,38 +152,31 @@ sources = files(
   'src/android/engine_host.vala',   # #if ANDROID — empty elsewhere
 )
 if host_machine.system() != 'android'
-  # The separate daemon + its D-Bus/SNI presenters are desktop-only.
+  # The separate daemon, its D-Bus control surface, and the tray (built on
+  # libstation's Station.Tray) are desktop-only.
   sources += files(
     'src/daemon/daemon.vala',
     'src/daemon/control.vala',
-    'src/daemon/tray.vala',
+    'src/tray.vala',
   )
 endif
 
-# Platform-specific extras (macOS menu-bar tray via NSStatusItem; Android JNI glue).
-mac_sources = []
+# Platform-specific extras. The tray, control IPC and shell helpers now come from
+# libstation (one Vala API, native backends inside the lib), so the macOS/Windows
+# C/Obj-C glue is gone; only the Windows icon resource and the Android JNI glue
+# remain app-specific.
 android_sources = []
 win_sources = []
 extra_deps = []
 extra_link_args = []
 inc_dirs = ['.']
-if host_machine.system() == 'darwin'
-  add_languages('objc', native: false)
-  mac_sources = files('src/mac/mac_tray.m', 'src/mac/mac_tray.vapi')
-  extra_deps += dependency('appleframeworks', modules: ['Cocoa'])
-  inc_dirs += 'src/mac'
-elif host_machine.system() == 'windows'
-  # Win32 glue: running-exe path, PID, and the Shell_NotifyIcon tray.
-  win_sources = files('src/win/win_compat.c', 'src/win/win_compat.vapi')
-  inc_dirs += 'src/win'
-  # Embed the app icon (Explorer/taskbar + tray source) via a linked resource.
+if host_machine.system() == 'windows'
+  # Embed the app icon (Explorer/taskbar + the icon libstation's tray loads from
+  # the exe's first resource) via a linked resource.
   windows_mod = import('windows')
-  win_sources += windows_mod.compile_resources('data/windows/another-tgproxy.rc',
+  win_sources = windows_mod.compile_resources('data/windows/another-tgproxy.rc',
     include_directories: include_directories('data/windows'),
     depend_files: files('data/windows/another-tgproxy.ico'))
-  cc = meson.get_compiler('c')
-  extra_deps += cc.find_library('shell32')   # Shell_NotifyIcon
-  extra_deps += cc.find_library('user32')    # window + menu APIs
 elif host_machine.system() == 'android'
   # C glue over the gdk-android public API (battery-optimization exemption, …).
   android_sources = files('src/android/android_bridge.c', 'src/android/android_bridge.vapi')
@@ -194,7 +194,7 @@ elif host_machine.system() == 'windows'
 endif
 
 executable('another-tgproxy',
-  sources, mac_sources, android_sources, win_sources, config_h, resources,
+  sources, android_sources, win_sources, config_h, resources,
   dependencies: deps + extra_deps,
   vala_args: vala_extra,
   c_args: ['-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name())],

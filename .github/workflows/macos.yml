@@ -52,7 +52,7 @@ jobs:
           brew update --quiet || true
           brew install \
             meson ninja pkg-config \
-            vala blueprint-compiler \
+            vala blueprint-compiler gobject-introspection \
             gtk4 libadwaita json-glib \
             openssl@3 gettext \
             adwaita-icon-theme librsvg \
@@ -78,7 +78,7 @@ jobs:
           # against still pour, and the build step surfaces any real miss.
           arch -x86_64 /usr/local/bin/brew install \
             meson ninja pkg-config \
-            vala blueprint-compiler \
+            vala blueprint-compiler gobject-introspection \
             gtk4 libadwaita json-glib \
             openssl@3 gettext \
             adwaita-icon-theme librsvg \

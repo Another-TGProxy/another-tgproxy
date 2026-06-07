@@ -43,8 +43,11 @@ meson install -C build
 info "Assembling portable folder..."
 mkdir -p "$DIST/bin"
 cp "$STAGE/bin/$BIN" "$DIST/bin/"
-# The core DLL installs to lib/; place it beside the exe so Windows finds it.
+# The core + libstation DLLs install under the staging prefix; place them beside
+# the exe so Windows finds them (ldd resolves them to the prefix, not ucrt64, so
+# copy_dll_deps' ucrt64 filter would skip them).
 find "$STAGE" -name 'libmtproxyws*.dll' -exec cp {} "$DIST/bin/" \;
+find "$STAGE" -name 'libstation*.dll' -exec cp {} "$DIST/bin/" \;
 
 info "Copying dependent DLLs..."
 copy_dll_deps "$DIST/bin/$BIN"

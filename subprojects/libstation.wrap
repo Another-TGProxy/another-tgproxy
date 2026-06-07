@@ -1,0 +1,11 @@
+# Cross-platform desktop integration (tray, control IPC, shell helpers) shared
+# with other Ampernic GTK apps. Built from source as a subproject on every
+# platform so each bundle ships it; the dependency carries its Vala binding, so
+# the app just depends on station-1 and valac picks up libstation-1.vapi.
+[wrap-git]
+url = https://github.com/Ampernic/libstation.git
+revision = master
+depth = 1
+
+[provide]
+station-1 = station_dep

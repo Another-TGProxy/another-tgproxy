@@ -10,14 +10,6 @@ namespace TgWsProxy {
         public string config_file () {
             return Path.build_filename (app_dir (), "config.json");
         }
-        public string control_sock () {
-            return Path.build_filename (app_dir (), "control.sock");
-        }
-        // Windows has no Unix sockets: the daemon listens on a loopback TCP port
-        // and writes the chosen port + an auth token here for the GUI to read.
-        public string control_json () {
-            return Path.build_filename (app_dir (), "control.json");
-        }
         public string pid_file () {
             return Path.build_filename (app_dir (), "daemon.pid");
         }

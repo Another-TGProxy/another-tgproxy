@@ -7,16 +7,12 @@ namespace TgWsProxy {
     public class Daemon : GLib.Application {
         Config cfg;
         Engine? engine = null;
-        SocketService? control = null;
-#if WINDOWS
-        string control_token = "";
-#endif
+        Station.ControlServer? control = null;
         string last_error = "";
-        TrayStatus? tray = null;
+        TrayController? tray = null;
         Control? control_dbus = null;
         StatusMode current_mode = StatusMode.WINDOW;
         GenericArray<Engine> retired = new GenericArray<Engine> ();
-        GenericArray<OutputStream> clients = new GenericArray<OutputStream> ();
 
         public Daemon () {
             Object (
@@ -116,7 +112,7 @@ namespace TgWsProxy {
 
 #if !DARWIN && !WINDOWS
         void setup_tray () {
-            tray = new TrayStatus ();
+            tray = new TrayController ();
             tray.open_requested.connect (open_gui);
             tray.open_telegram_requested.connect (open_telegram);
             tray.toggle_requested.connect (toggle_engine);
@@ -177,7 +173,7 @@ namespace TgWsProxy {
             var uri = "tg://proxy?server=%s&port=%d&secret=dd%s".printf (
                 cfg.host, cfg.port, cfg.secret);
             try {
-                AppInfo.launch_default_for_uri (uri, null);
+                Station.open_uri (uri);
             } catch (Error e) {
                 warning ("open telegram failed: %s", e.message);
             }
@@ -211,91 +207,32 @@ namespace TgWsProxy {
                 null, DBusCallFlags.NONE, -1, null);
         }
 
-        // ---- control server (Unix socket) ----
+        // ---- control server (libstation: Unix socket / loopback TCP + token) ----
 
         void start_control () throws Error {
-            control = new SocketService ();
-#if WINDOWS
-            // No Unix sockets: listen on an ephemeral loopback TCP port and
-            // publish the chosen port + an auth token for the GUI to read.
-            var listen = new InetSocketAddress (
-                new InetAddress.loopback (SocketFamily.IPV4), 0);
-            SocketAddress? effective = null;
-            control.add_address (listen, SocketType.STREAM, SocketProtocol.TCP,
-                                 null, out effective);
-            control_token = gen_control_token ();
-            write_control_endpoint (((InetSocketAddress) effective).get_port (),
-                                    control_token);
-#else
-            var sockpath = Paths.control_sock ();
-            if (FileUtils.test (sockpath, FileTest.EXISTS))
-                FileUtils.unlink (sockpath);   // stale socket from a prior crash
-            var addr = new UnixSocketAddress (sockpath);
-            control.add_address (addr, SocketType.STREAM, SocketProtocol.DEFAULT, null, null);
-            FileUtils.chmod (sockpath, 0600);
-#endif
-            control.incoming.connect ((conn, src) => {
-                handle_control.begin ((SocketConnection) conn);
-                return false;
-            });
+            control = new Station.ControlServer (Build.DAEMON_ID);
+            control.command.connect (on_control_command);
             control.start ();
         }
 
-        void push_status_all () {
-            if (clients.length == 0) return;
-            var line = snapshot ().to_line ();
-            for (int i = clients.length - 1; i >= 0; i--) {
-                try {
-                    clients[i].write_all (line.data, null);
-                } catch (Error e) {
-                    clients.remove_index (i);
-                }
+        void on_control_command (string line) {
+            var cmd = command_of (line);
+            if (cmd == "status") {
+                push_status_all ();
+            } else if (cmd == "reload") {
+                stop_engine ();
+                start_engine ();
+                reconcile_status_mode ();
+                publish_status ();
+                push_status_all ();
+            } else if (cmd == "stop") {
+                do_quit ();
             }
         }
 
-        async void handle_control (SocketConnection conn) {
-            var os = conn.output_stream;
-            var dis = new DataInputStream (conn.input_stream);
-#if WINDOWS
-            // A loopback port is reachable by any local process; require the token
-            // (sent as the first line) before trusting the connection.
-            try {
-                var auth = yield dis.read_line_async (Priority.DEFAULT, null);
-                if (auth == null || auth.strip () != control_token) {
-                    try { conn.close (); } catch (Error e) { }
-                    return;
-                }
-            } catch (Error e) {
-                return;
-            }
-#endif
-            clients.add (os);
-            try {
-                yield os.write_all_async (snapshot ().to_line ().data,
-                                          Priority.DEFAULT, null, null);
-                string? line;
-                while ((line = yield dis.read_line_async (Priority.DEFAULT, null)) != null) {
-                    var cmd = command_of (line);
-                    if (cmd == "status") {
-                        yield os.write_all_async (snapshot ().to_line ().data,
-                                                  Priority.DEFAULT, null, null);
-                    } else if (cmd == "reload") {
-                        stop_engine ();
-                        start_engine ();
-                        reconcile_status_mode ();
-                        publish_status ();
-                        yield os.write_all_async (snapshot ().to_line ().data,
-                                                  Priority.DEFAULT, null, null);
-                    } else if (cmd == "stop") {
-                        do_quit ();
-                        break;
-                    }
-                }
-            } catch (Error e) {
-                // client gone
-            }
-            for (int i = 0; i < clients.length; i++)
-                if (clients[i] == os) { clients.remove_index (i); break; }
+        void push_status_all () {
+            if (control != null)
+                control.broadcast (snapshot ().to_line ().chomp ());
         }
 
         // ---- GApplication lifecycle ----
@@ -306,7 +243,7 @@ namespace TgWsProxy {
             Paths.ensure_dir ();
 #if WINDOWS
             // No D-Bus / signals on Windows; the GUI stops us by this PID.
-            try { FileUtils.set_contents (Paths.pid_file (), Win.pid ().to_string ()); }
+            try { FileUtils.set_contents (Paths.pid_file (), Station.get_pid ().to_string ()); }
             catch (Error e) { warning ("pid write failed: %s", e.message); }
 #endif
             cfg = Config.load ();
@@ -344,17 +281,16 @@ namespace TgWsProxy {
 
         public override void shutdown () {
             stop_engine ();
-            if (control != null) control.stop ();
+            if (control != null) { control.stop (); control = null; }
             cleanup_control ();
             base.shutdown ();
         }
 
+        // libstation owns the control endpoint files; only the Windows pid file
+        // (used by the GUI to stop us by PID) is ours to clear.
         static void cleanup_control () {
 #if WINDOWS
-            FileUtils.unlink (Paths.control_json ());
             FileUtils.unlink (Paths.pid_file ());
-#else
-            FileUtils.unlink (Paths.control_sock ());
 #endif
         }
 

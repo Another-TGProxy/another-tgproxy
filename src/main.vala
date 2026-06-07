@@ -7,7 +7,7 @@ int main (string[] args) {
     // .exe (<dir>/ssl/certs/ca-bundle.crt) unless the user already set one.
     if (Environment.get_variable ("SSL_CERT_FILE") == null) {
         var ca = Path.build_filename (
-            Path.get_dirname (Win.exe_path ()), "ssl", "certs", "ca-bundle.crt");
+            Path.get_dirname (Station.get_executable_path () ?? ""), "ssl", "certs", "ca-bundle.crt");
         if (FileUtils.test (ca, FileTest.EXISTS))
             Environment.set_variable ("SSL_CERT_FILE", ca, true);
     }
@@ -28,7 +28,7 @@ int main (string[] args) {
 #if WINDOWS
     // Relocatable bundle: the baked-in LOCALEDIR is the CI build prefix. Resolve
     // the catalogs next to the exe — <root>/share/locale (exe lives in <root>/bin).
-    var win_root = Path.get_dirname (Path.get_dirname (Win.exe_path ()));
+    var win_root = Path.get_dirname (Path.get_dirname (Station.get_executable_path () ?? ""));
     localedir = Path.build_filename (win_root, "share", "locale");
 #endif
     Intl.bindtextdomain (Build.GETTEXT_PACKAGE, localedir);

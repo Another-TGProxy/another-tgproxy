@@ -86,65 +86,6 @@ namespace TgWsProxy {
         return gen.to_data (null) + "\n";
     }
 
-#if WINDOWS
-    // The loopback control endpoint the daemon publishes for the GUI. Unlike a
-    // Unix socket, a loopback TCP port is reachable by any local process, so the
-    // daemon also writes a random token the client must present as its first line.
-    public struct ControlEndpoint {
-        public uint16 port;
-        public string token;
-    }
-
-    public string gen_control_token () {
-        var sb = new StringBuilder ();
-        for (int i = 0; i < 16; i++)
-            sb.append_printf ("%02x", (uint8) Random.int_range (0, 256));
-        return sb.str;
-    }
-
-    public bool write_control_endpoint (uint16 port, string token) {
-        var b = new Json.Builder ();
-        b.begin_object ();
-        b.set_member_name ("port"); b.add_int_value (port);
-        b.set_member_name ("token"); b.add_string_value (token);
-        b.end_object ();
-        var gen = new Json.Generator ();
-        gen.set_root (b.get_root ());
-        try {
-            FileUtils.set_contents (Paths.control_json (), gen.to_data (null));
-            return true;
-        } catch (Error e) {
-            warning ("control endpoint write failed: %s", e.message);
-            return false;
-        }
-    }
-
-    public bool read_control_endpoint (out ControlEndpoint ep) {
-        ep = ControlEndpoint () { port = 0, token = "" };
-        string data;
-        try {
-            if (!FileUtils.get_contents (Paths.control_json (), out data))
-                return false;
-        } catch (Error e) {
-            return false;
-        }
-        try {
-            var parser = new Json.Parser ();
-            parser.load_from_data (data, -1);
-            var root = parser.get_root ();
-            if (root == null || root.get_node_type () != Json.NodeType.OBJECT)
-                return false;
-            var o = root.get_object ();
-            if (!o.has_member ("port") || !o.has_member ("token")) return false;
-            ep.port = (uint16) o.get_int_member ("port");
-            ep.token = o.get_string_member ("token");
-            return ep.port != 0;
-        } catch (Error e) {
-            return false;
-        }
-    }
-#endif
-
     public string? command_of (string line) {
         try {
             var parser = new Json.Parser ();

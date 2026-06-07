@@ -36,6 +36,8 @@ jobs:
           set -euo pipefail
           CORE=https://github.com/Another-TGProxy/mtproxy-ws.git
           CORE_COMMIT=$(git ls-remote "$CORE" refs/heads/main | cut -f1)
+          STATION=https://github.com/Ampernic/libstation.git
+          STATION_COMMIT=$(git ls-remote "$STATION" refs/heads/master | cut -f1)
           VERSION="${RELEASE_VERSION#v}"
           [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
           # Inject the displayed version into the gui module, or drop the placeholder.
@@ -46,6 +48,7 @@ jobs:
           fi
           sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
               -e "s/__GUI_COMMIT__/${{ github.sha }}/g" \
+              -e "s/__STATION_COMMIT__/$STATION_COMMIT/g" \
               -e "$VOPT" \
               packaging/flatpak/space.ampernic.AnotherTGProxy.yml \
               > packaging/flatpak/_rendered.yml
