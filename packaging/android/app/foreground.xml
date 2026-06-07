@@ -1,13 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Pre-made Android VectorDrawable (type="avd") so Pixiewood's generate step
-     doesn't need Android Studio's Svg2Vector. White paper plane on the blue
-     adaptive-icon background, matching the desktop app icon. -->
+<!-- Adaptive-icon foreground, ported from the desktop app SVG
+     (data/icons/hicolor/scalable/apps/space.ampernic.AnotherTGProxy.svg): a white
+     paper plane over a faint proxy-network backdrop. Pre-made VectorDrawable
+     (type="avd") so Pixiewood's generate step needs no Svg2Vector. The desktop
+     256px art is scaled by 108/256 = 0.421875 into the 108dp adaptive viewport
+     (each group folds in the SVG's own matrix * that scale), landing inside the
+     66dp safe zone. CI also reuses this file as the <monochrome> (themed) layer. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-  <path
-      android:fillColor="#FFFFFF"
-      android:pathData="M30,72 L78,54 L30,36 L30,49 L60,54 L30,59 Z"/>
+  <!-- proxy network, recessive backdrop (SVG matrix(10,0,0,10,48,48) * 0.421875) -->
+  <group android:scaleX="4.21875" android:scaleY="4.21875"
+         android:translateX="20.25" android:translateY="20.25">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.45"
+        android:pathData="m 2 0 c -1.097656 0 -2 0.902344 -2 2.003906 c 0 1.097656 0.902344 2 2 2 c 0.734375 0 1.382812 -0.40625 1.730469 -1 h 3.269531 c 0.5625 0 1 0.433594 1 1 v 2.269532 c -0.300781 0.175781 -0.554688 0.425781 -0.730469 0.730468 h -3.539062 c -0.347657 -0.597656 -0.996094 -1 -1.730469 -1 c -1.097656 0 -2 0.898438 -2 2 c 0 1.097656 0.902344 2 2 2 c 0.734375 0 1.382812 -0.40625 1.730469 -1 h 3.539062 c 0.175781 0.300782 0.429688 0.550782 0.730469 0.726563 v 2.273437 c 0 0.5625 -0.4375 1 -1 1 h -3.269531 c -0.347657 -0.597656 -0.996094 -1 -1.730469 -1 c -1.097656 0 -2 0.898438 -2 2 c 0 1.097656 0.902344 2 2 2 c 0.734375 0 1.382812 -0.40625 1.730469 -1 h 3.269531 c 1.644531 0 3 -1.355468 3 -3 v -2.273437 c 0.300781 -0.175781 0.554688 -0.425781 0.730469 -0.726563 h 1.539062 c 0.347657 0.59375 0.996094 1 1.730469 1 c 1.097656 0 2 -0.902344 2 -2 c 0 -1.101562 -0.902344 -2 -2 -2 c -0.734375 0 -1.382812 0.402344 -1.730469 1 h -1.539062 c -0.175781 -0.304687 -0.429688 -0.554687 -0.730469 -0.730468 v -2.269532 c 0 -1.648437 -1.355469 -3 -3 -3 h -3.269531 c -0.347657 -0.597656 -0.996094 -1.003906 -1.730469 -1.003906 z m 0 1.003906 c 0.558594 0 1 0.441406 1 1 c 0 0.554688 -0.441406 1 -1 1 s -1 -0.445312 -1 -1 c 0 -0.558594 0.441406 -1 1 -1 z m 0 6 c 0.558594 0 1 0.441406 1 1 c 0 0.554688 -0.441406 1 -1 1 s -1 -0.445312 -1 -1 c 0 -0.558594 0.441406 -1 1 -1 z m 12 0 c 0.558594 0 1 0.441406 1 1 c 0 0.554688 -0.441406 1 -1 1 s -1 -0.445312 -1 -1 c 0 -0.558594 0.441406 -1 1 -1 z m -12 6 c 0.558594 0 1 0.441406 1 1 c 0 0.554688 -0.441406 1 -1 1 s -1 -0.445312 -1 -1 c 0 -0.558594 0.441406 -1 1 -1 z m 0 0"/>
+  </group>
+  <!-- paper plane, hero (SVG matrix(7.5,0,0,7.5,68,68) * 0.421875) -->
+  <group android:scaleX="3.1640625" android:scaleY="3.1640625"
+         android:translateX="28.6875" android:translateY="28.6875">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="m 15 7.992188 l -14 -7 v 6 l 8 1 l -8 1 v 6 z"/>
+  </group>
 </vector>
