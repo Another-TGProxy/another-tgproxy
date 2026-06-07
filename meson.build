@@ -159,9 +159,17 @@ if host_machine.system() == 'darwin'
   extra_deps += dependency('appleframeworks', modules: ['Cocoa'])
   inc_dirs += 'src/mac'
 elif host_machine.system() == 'windows'
-  # Win32 glue (running-exe path, PID; the Shell_NotifyIcon tray lands here too).
+  # Win32 glue: running-exe path, PID, and the Shell_NotifyIcon tray.
   win_sources = files('src/win/win_compat.c', 'src/win/win_compat.vapi')
   inc_dirs += 'src/win'
+  # Embed the app icon (Explorer/taskbar + tray source) via a linked resource.
+  windows_mod = import('windows')
+  win_sources += windows_mod.compile_resources('data/windows/another-tgproxy.rc',
+    include_directories: include_directories('data/windows'),
+    depend_files: files('data/windows/another-tgproxy.ico'))
+  cc = meson.get_compiler('c')
+  extra_deps += cc.find_library('shell32')   # Shell_NotifyIcon
+  extra_deps += cc.find_library('user32')    # window + menu APIs
 elif host_machine.system() == 'android'
   # C glue over the gdk-android public API (battery-optimization exemption, …).
   android_sources = files('src/android/android_bridge.c', 'src/android/android_bridge.vapi')

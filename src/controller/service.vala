@@ -90,10 +90,16 @@ namespace TgWsProxy {
                 var sock = new Socket (ip.get_family (), SocketType.STREAM, SocketProtocol.TCP);
                 bool busy = false;
                 try {
-                    // Use SO_REUSEADDR like the daemon does, so just-closed
-                    // connections lingering in TIME_WAIT don't look "in use"
-                    // (an actually-listening daemon still yields EADDRINUSE).
+                    // On POSIX, bind with SO_REUSEADDR like the daemon does, so a
+                    // just-closed port lingering in TIME_WAIT doesn't look "in use"
+                    // (a live daemon still yields EADDRINUSE). On Windows
+                    // SO_REUSEADDR instead lets two sockets share a port, so the
+                    // probe must bind WITHOUT it to detect the running daemon.
+#if WINDOWS
+                    sock.bind (addr, false);
+#else
                     sock.bind (addr, true);
+#endif
                 } catch (Error e) {
                     busy = true;
                 }
@@ -167,7 +173,9 @@ namespace TgWsProxy {
         public void set_autostart (bool on) {
             try {
                 if (on) {
-                    var cmd = "\"%s\" --daemon".printf (daemon_exec ());
+                    // Launch the GUI minimized so the tray appears on login and
+                    // brings the proxy up; --minimized keeps the window hidden.
+                    var cmd = "\"%s\" --minimized".printf (daemon_exec ());
                     new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE,
                                     "reg", "add", RUN_KEY, "/v", Build.APP_DIRNAME,
                                     "/t", "REG_SZ", "/d", cmd, "/f");

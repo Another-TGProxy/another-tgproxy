@@ -11,6 +11,20 @@ namespace TgWsProxy {
         bool tray_running = false;
         string tray_link = "";
 #endif
+#if WINDOWS
+        // The Shell_NotifyIcon tray lives in this GUI process (the headless daemon
+        // has no message pump); the app holds itself open for it like on macOS.
+        void* win_tray = null;
+        DaemonClient? win_client = null;
+        ServiceController? win_service = null;
+        bool win_running = false;
+        string win_link = "";
+        bool win_close_hooked = false;
+        bool win_quitting = false;
+        // Set from main when launched with --minimized (autostart): start in the
+        // tray with no window.
+        public static bool start_minimized = false;
+#endif
 
         public Application () {
             Object (
@@ -28,15 +42,28 @@ namespace TgWsProxy {
 #if DARWIN
             setup_mac_tray ();
 #endif
+#if WINDOWS
+            setup_win_tray ();
+#endif
         }
 
         protected override void activate () {
+#if WINDOWS
+            // Autostart launch: stay in the tray, create no window until asked.
+            if (start_minimized && this.active_window == null) {
+                start_minimized = false;
+                return;
+            }
+#endif
             var win = this.active_window;
             if (win == null) {
                 win = new Window (this);
             }
 #if ANDROID
             wire_android (win);   // before present() so we catch the first map
+#endif
+#if WINDOWS
+            hook_win_close (win);   // close hides to tray instead of quitting
 #endif
             win.present ();
         }
@@ -151,6 +178,74 @@ namespace TgWsProxy {
                 quit ();
                 break;
             }
+        }
+#endif
+
+#if WINDOWS
+        void setup_win_tray () {
+            var cfg = Config.load ();
+            win_service = new ServiceController (cfg);
+            win_client = new DaemonClient ();
+            win_client.status_changed.connect (on_win_tray_status);
+            win_client.start ();
+            win_tray = Win.tray_new (on_win_tray_action,
+                _("Open"), _("Open in Telegram"),
+                _("Start"), _("Stop"), _("Restart"), _("Quit"));
+            if (start_minimized)
+                win_service.start ();   // autostart: bring the proxy up windowless
+            hold ();   // keep the tray alive after the window closes
+        }
+
+        void on_win_tray_status (Status s) {
+            win_running = s.running;
+            if (s.secret.length == 32)
+                win_link = "tg://proxy?server=%s&port=%d&secret=dd%s".printf (
+                    s.host, s.port, s.secret);
+            if (win_tray != null)
+                Win.tray_update (win_tray,
+                    s.running ? _("Another TGProxy — running")
+                              : _("Another TGProxy — stopped"),
+                    s.running ? 1 : 0);
+        }
+
+        void on_win_tray_action (int action) {
+            switch (action) {
+            case 0:   // Open
+                activate ();
+                break;
+            case 1:   // Open in Telegram
+                if (win_link != "") {
+                    try { AppInfo.launch_default_for_uri (win_link, null); }
+                    catch (Error e) { warning ("open telegram: %s", e.message); }
+                }
+                break;
+            case 2:   // toggle start/stop
+                if (win_running) { win_client.send ("stop"); win_service.stop (); }
+                else win_service.start ();
+                break;
+            case 3:   // Restart
+                win_client.send ("reload");
+                break;
+            case 4:   // Quit
+                win_quitting = true;
+                win_client.send ("stop");
+                if (win_tray != null) { Win.tray_free (win_tray); win_tray = null; }
+                release ();
+                quit ();
+                break;
+            }
+        }
+
+        // Closing the window hides it to the tray; the app keeps running. Quitting
+        // from the tray sets win_quitting so the real close goes through.
+        void hook_win_close (Gtk.Window win) {
+            if (win_close_hooked) return;
+            win_close_hooked = true;
+            win.close_request.connect (() => {
+                if (win_quitting) return false;
+                win.set_visible (false);
+                return true;
+            });
         }
 #endif
     }

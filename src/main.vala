@@ -46,6 +46,16 @@ int main (string[] args) {
 #endif
     Environment.set_application_name (Build.APP_NAME);
     Adw.init ();
+#if WINDOWS
+    // Autostart entry passes --minimized: start in the tray. Strip it so it
+    // doesn't reach GApplication's option handling.
+    string[] filtered = {};
+    foreach (var a in args) {
+        if (a == "--minimized") TgWsProxy.Application.start_minimized = true;
+        else filtered += a;
+    }
+    args = filtered;
+#endif
     var app = new TgWsProxy.Application ();
     return app.run (args);
 }
