@@ -25,6 +25,12 @@ int main (string[] args) {
     if (data_dirs.length > 0)
         localedir = Path.build_filename (data_dirs[0], "locale");
 #endif
+#if WINDOWS
+    // Relocatable bundle: the baked-in LOCALEDIR is the CI build prefix. Resolve
+    // the catalogs next to the exe — <root>/share/locale (exe lives in <root>/bin).
+    var win_root = Path.get_dirname (Path.get_dirname (Win.exe_path ()));
+    localedir = Path.build_filename (win_root, "share", "locale");
+#endif
     Intl.bindtextdomain (Build.GETTEXT_PACKAGE, localedir);
     Intl.bind_textdomain_codeset (Build.GETTEXT_PACKAGE, "UTF-8");
     Intl.textdomain (Build.GETTEXT_PACKAGE);
