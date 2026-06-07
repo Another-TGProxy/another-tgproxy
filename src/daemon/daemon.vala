@@ -5,14 +5,11 @@ namespace TgWsProxy {
     // a Unix-socket control server for the GUI. Under Flatpak it also publishes a
     // live status to the XDG Background portal (see portal_set_status).
     public class Daemon : GLib.Application {
-        Config cfg;
-        Engine? engine = null;
+        EngineRunner runner = new EngineRunner ();
         Station.ControlServer? control = null;
-        string last_error = "";
         TrayController? tray = null;
         Control? control_dbus = null;
         StatusMode current_mode = StatusMode.WINDOW;
-        GenericArray<Engine> retired = new GenericArray<Engine> ();
 
         public Daemon () {
             Object (
@@ -21,54 +18,8 @@ namespace TgWsProxy {
             );
         }
 
-        // ---- engine lifecycle ----
-
-        void setup_logging () {
-            Logging.setup (cfg);
-        }
-
-        bool start_engine () {
-            cfg = Config.load ();
-            engine = new Engine (cfg.host, (uint16) cfg.port, cfg.secret_bytes ());
-            cfg.configure_engine (engine);
-            if (!engine.start ()) {
-                engine = null;
-                last_error = _("Failed to bind %s:%d — port already in use").printf (
-                    cfg.host, cfg.port);
-                warning ("%s", last_error);
-                return false;
-            }
-            last_error = "";
-            message ("proxy started: tg://proxy?server=%s&port=%d&secret=dd%s",
-                     cfg.host, cfg.port, cfg.secret);
-            return true;
-        }
-
-        void stop_engine () {
-            if (engine != null) {
-                engine.stop ();
-                // Keep alive instead of freeing: detached client threads may
-                // still reference it; freeing here would be a use-after-free.
-                retired.add ((owned) engine);
-                engine = null;
-            }
-        }
-
-        Status snapshot () {
-            var s = new Status ();
-            s.host = cfg.host;
-            s.port = cfg.port;
-            s.secret = cfg.secret;
-            s.running = engine != null;
-            s.error = last_error;
-            if (engine != null) {
-                s.conn_total = engine.connections_total ();
-                s.conn_active = engine.connections_active ();
-                s.bytes_up = engine.bytes_up ();
-                s.bytes_down = engine.bytes_down ();
-            }
-            return s;
-        }
+        // The engine lifecycle (start/stop/reload/snapshot) lives in the shared
+        // EngineRunner; the daemon adds the control server, tray and D-Bus surface.
 
         // ---- GNOME background status (xdg Background portal) ----
 
@@ -80,22 +31,15 @@ namespace TgWsProxy {
 
         // Fill the user's status_template with live values.
         string status_message () {
-            if (engine == null)
+            if (!runner.running)
                 return _("Proxy stopped");
-            var s = cfg.status_template;
-            s = s.replace ("{active}", engine.connections_active ().to_string ());
-            s = s.replace ("{total}", engine.connections_total ().to_string ());
-            s = s.replace ("{up}", human_bytes (engine.bytes_up ()));
-            s = s.replace ("{down}", human_bytes (engine.bytes_down ()));
-            s = s.replace ("{host}", cfg.host);
-            s = s.replace ("{port}", cfg.port.to_string ());
-            return s;
+            return runner.snapshot ().format (runner.cfg.status_template);
         }
 
         // Create/destroy presenters so that exactly one (the chosen mode's) is
         // alive — selecting any mode tears the others down.
         void reconcile_status_mode () {
-            current_mode = Platform.get_default ().mode_of (cfg.status_mode);
+            current_mode = Platform.get_default ().mode_of (runner.cfg.status_mode);
 #if !DARWIN && !WINDOWS
             // The SNI tray is the daemon's only on Linux; on macOS/Windows the
             // native tray (NSStatusItem / Shell_NotifyIcon) lives in the GUI.
@@ -140,15 +84,14 @@ namespace TgWsProxy {
         }
 
         void toggle_engine () {
-            if (engine != null) stop_engine ();
-            else start_engine ();
+            if (runner.running) runner.stop ();
+            else runner.start ();
             push_status_all ();
             publish_status ();
         }
 
         void restart_engine () {
-            stop_engine ();
-            start_engine ();
+            runner.reload ();
             push_status_all ();
             publish_status ();
         }
@@ -169,6 +112,7 @@ namespace TgWsProxy {
         }
 
         void open_telegram () {
+            var cfg = runner.cfg;
             if (cfg.secret.length != 32) return;
             var uri = "tg://proxy?server=%s&port=%d&secret=dd%s".printf (
                 cfg.host, cfg.port, cfg.secret);
@@ -182,9 +126,9 @@ namespace TgWsProxy {
         // Push the live status to every active presenter.
         void publish_status () {
             if (current_mode == StatusMode.BACKGROUND_PORTAL) portal_set_status ();
-            if (tray != null) tray.update (status_message (), engine != null);
+            if (tray != null) tray.update (status_message (), runner.running);
             if (control_dbus != null) {
-                bool r = engine != null;
+                bool r = runner.running;
                 var st = status_message ();
                 if (r != control_dbus.running || st != control_dbus.status)
                     control_dbus.publish (r, st);
@@ -220,8 +164,7 @@ namespace TgWsProxy {
             if (cmd == "status") {
                 push_status_all ();
             } else if (cmd == "reload") {
-                stop_engine ();
-                start_engine ();
+                runner.reload ();
                 reconcile_status_mode ();
                 publish_status ();
                 push_status_all ();
@@ -232,7 +175,7 @@ namespace TgWsProxy {
 
         void push_status_all () {
             if (control != null)
-                control.broadcast (snapshot ().to_line ().chomp ());
+                control.broadcast (runner.snapshot ().to_line ().chomp ());
         }
 
         // ---- GApplication lifecycle ----
@@ -246,10 +189,9 @@ namespace TgWsProxy {
             try { FileUtils.set_contents (Paths.pid_file (), Station.get_pid ().to_string ()); }
             catch (Error e) { warning ("pid write failed: %s", e.message); }
 #endif
-            cfg = Config.load ();
-            setup_logging ();
+            Logging.setup (runner.cfg);
 
-            start_engine ();
+            runner.start ();
             try {
                 start_control ();
             } catch (Error e) {
@@ -280,7 +222,7 @@ namespace TgWsProxy {
         }
 
         public override void shutdown () {
-            stop_engine ();
+            runner.stop ();
             if (control != null) { control.stop (); control = null; }
             cleanup_control ();
             base.shutdown ();
@@ -295,7 +237,7 @@ namespace TgWsProxy {
         }
 
         void do_quit () {
-            stop_engine ();
+            runner.stop ();
             if (tray != null) { tray.close (); tray = null; }
             if (control != null) { control.stop (); control = null; }
             cleanup_control ();

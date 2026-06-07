@@ -157,6 +157,7 @@ sources = files(
   'src/ipc.vala',
   'src/logging.vala',
   'src/platform.vala',
+  'src/engine-runner.vala',   # shared engine lifecycle (daemon + Android host)
   'src/ui/window.vala',
   'src/ui/home-view.vala',
   'src/ui/settings-view.vala',
