@@ -162,6 +162,15 @@ jobs:
           # build types' manifests, so install it in each build-type source set.
           cp packaging/android/app/AndroidManifest-overlay.xml "$APP/src/debug/AndroidManifest.xml"
           cp packaging/android/app/AndroidManifest-overlay.xml "$APP/src/release/AndroidManifest.xml"
+          # GTK/Pixiewood dlopen() native .so by path, so they must be unpacked to
+          # disk. Debug does this by default; release packs them in the APK and the
+          # app crashes on launch. Force legacy (extracted) jniLibs packaging via
+          # the DSL — AGP rejects android:extractNativeLibs in the manifest now.
+          if [ -f "$APP/build.gradle" ]; then
+            printf '\nandroid { packagingOptions { jniLibs { useLegacyPackaging true } } }\n' >> "$APP/build.gradle"
+          elif [ -f "$APP/build.gradle.kts" ]; then
+            printf '\nandroid { packaging { jniLibs { useLegacyPackaging = true } } }\n' >> "$APP/build.gradle.kts"
+          fi
           # Pixiewood's build stages the native libs + GTK runtime into the gradle
           # project (and assembles debug). Always run it; for a signed release,
           # assemble the release variant on top — it reuses those staged libs.

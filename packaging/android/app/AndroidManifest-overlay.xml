@@ -12,13 +12,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
-    <!-- extractNativeLibs=true: GTK/Pixiewood dlopen() many .so by path, so the
-         native libs must be unpacked to disk. Debug defaults to true (works);
-         release defaults to false (libs stay in the APK) → dlopen fails and the
-         app crashes on launch. Force extraction for both. -->
     <application android:name="space.ampernic.anothertgproxy.ProxyApplication"
-                 android:extractNativeLibs="true"
-                 tools:replace="android:name,android:extractNativeLibs">
+                 tools:replace="android:name">
         <service android:name="space.ampernic.anothertgproxy.ProxyService"
                  android:exported="false"
                  android:foregroundServiceType="specialUse">
