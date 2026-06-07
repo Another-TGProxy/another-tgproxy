@@ -109,7 +109,23 @@ for ca in "$PREFIX/ssl/certs/ca-bundle.crt" "$PREFIX/etc/ssl/certs/ca-bundle.crt
   if [ -f "$ca" ]; then cp "$ca" "$DIST/bin/ssl/certs/ca-bundle.crt"; break; fi
 done
 
-# -- 8. Zip -------------------------------------------------------------------
-info "Zipping..."
-( cd "$PWD/dist" && zip -qr "../another-tgproxy-windows-x64.zip" "another-tgproxy" )
-info "Done: another-tgproxy-windows-x64.zip"
+# -- 8. Installers ------------------------------------------------------------
+# Naming: AnotherTGProxy-<version>-windows-x86_64-{setup,portable}.exe
+VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+BASE="AnotherTGProxy-${VERSION:-0}-windows-x86_64"
+ICON="$PWD/data/windows/another-tgproxy.ico"
+
+if [ -n "${MAKENSIS:-}" ]; then
+  info "Building installers (NSIS)..."
+  src_w=$(cygpath -w "$DIST")
+  icon_w=$(cygpath -w "$ICON")
+  "$MAKENSIS" -DVERSION="$VERSION" -DSRCDIR="$src_w" -DICON="$icon_w" \
+      -DOUTFILE="$(cygpath -w "$PWD/$BASE-setup.exe")" packaging/windows/setup.nsi
+  "$MAKENSIS" -DVERSION="$VERSION" -DSRCDIR="$src_w" -DICON="$icon_w" \
+      -DOUTFILE="$(cygpath -w "$PWD/$BASE-portable.exe")" packaging/windows/portable.nsi
+  info "Done: $BASE-setup.exe, $BASE-portable.exe"
+else
+  info "MAKENSIS unset — falling back to a zip..."
+  ( cd "$PWD/dist" && zip -qr "../$BASE.zip" "another-tgproxy" )
+  info "Done: $BASE.zip"
+fi
