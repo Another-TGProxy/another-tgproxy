@@ -172,6 +172,13 @@ jobs:
           elif [ -f "$APP/build.gradle.kts" ]; then
             printf '\nandroid { packaging { jniLibs { useLegacyPackaging = true } } }\n' >> "$APP/build.gradle.kts"
           fi
+          # Pixiewood drives meson itself, so we can't pass -Drelease_version; bake
+          # the tag version as the option's default in meson_options.txt instead, so
+          # the About dialog shows it too (desktop passes it via -D).
+          VERSION="${RELEASE_VERSION#v}"
+          if [ -n "$VERSION" ]; then
+            sed -i "s|value: '',|value: '$VERSION',|" meson_options.txt
+          fi
           # Pixiewood's build stages the native libs + GTK runtime into the gradle
           # project (and assembles debug). Always run it; for a signed release,
           # assemble the release variant on top — it reuses those staged libs.
