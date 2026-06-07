@@ -116,14 +116,12 @@ BASE="AnotherTGProxy-${VERSION:-0}-windows-x86_64"
 ICON="$PWD/data/windows/another-tgproxy.ico"
 
 if [ -n "${MAKENSIS:-}" ]; then
-  info "Building installers (NSIS)..."
+  info "Building installer (NSIS)..."
   src_w=$(cygpath -w "$DIST")
   icon_w=$(cygpath -w "$ICON")
   "$MAKENSIS" -DVERSION="$VERSION" -DSRCDIR="$src_w" -DICON="$icon_w" \
       -DOUTFILE="$(cygpath -w "$PWD/$BASE-setup.exe")" packaging/windows/setup.nsi
-  "$MAKENSIS" -DVERSION="$VERSION" -DSRCDIR="$src_w" -DICON="$icon_w" \
-      -DOUTFILE="$(cygpath -w "$PWD/$BASE-portable.exe")" packaging/windows/portable.nsi
-  info "Done: $BASE-setup.exe, $BASE-portable.exe"
+  info "Done: $BASE-setup.exe"
 else
   info "MAKENSIS unset — falling back to a zip..."
   ( cd "$PWD/dist" && zip -qr "../$BASE.zip" "another-tgproxy" )

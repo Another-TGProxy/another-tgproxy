@@ -61,21 +61,21 @@ jobs:
         shell: pwsh
         run: choco install nsis -y --no-progress
 
-      - name: Build app + installers (setup + portable)
+      - name: Build app + installer (setup)
         env:
           CORE_SRC: _core
           MAKENSIS: /c/Program Files (x86)/NSIS/makensis.exe
         run: bash packaging/windows/bundle-windows.sh
 
-      - name: Upload installers
+      - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
           name: another-tgproxy-windows-x86_64
-          path: AnotherTGProxy-*-windows-x86_64-*.exe
+          path: AnotherTGProxy-*-windows-x86_64-setup.exe
           retention-days: 14
 
       - name: Release on tag
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: AnotherTGProxy-*-windows-x86_64-*.exe
+          files: AnotherTGProxy-*-windows-x86_64-setup.exe

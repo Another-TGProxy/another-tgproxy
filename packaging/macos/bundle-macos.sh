@@ -174,7 +174,8 @@ install -m 0755 "$SELF/launcher" "$MACOS/launcher"
 # -- 9. DMG --------------------------------------------------------------------
 info "Creating DMG..."
 ARCH="$(uname -m)"
-DMG="$DIST/${BIN}-${APP_VERSION}-${ARCH}.dmg"
+# Name: AnotherTGProxy-<version>-macos-<arch>.dmg
+DMG="$DIST/AnotherTGProxy-${APP_VERSION}-macos-${ARCH}.dmg"
 create-dmg --volname "$APP_NAME" --app-drop-link 420 180 \
   --icon "$APP_NAME.app" 140 180 --window-size 600 360 \
   "$DMG" "$APP" 2>/dev/null || \

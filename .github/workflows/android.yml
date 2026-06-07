@@ -158,13 +158,24 @@ jobs:
         if: always()
         run: |
           mkdir -p "$GITHUB_WORKSPACE/android-apks"
-          find . -name '*.apk' -exec cp -v {} "$GITHUB_WORKSPACE/android-apks/" \;
+          VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+          # Name: AnotherTGProxy-<version>-android-<abi>.apk
+          find . -name '*.apk' | while read -r apk; do
+            case "$apk" in
+              *arm64-v8a*)   abi=arm64-v8a ;;
+              *armeabi-v7a*) abi=armeabi-v7a ;;
+              *x86_64*)      abi=x86_64 ;;
+              *universal*)   abi=universal ;;
+              *)             abi=universal ;;
+            esac
+            cp -v "$apk" "$GITHUB_WORKSPACE/android-apks/AnotherTGProxy-$VERSION-android-$abi.apk"
+          done
           ls -la "$GITHUB_WORKSPACE/android-apks/" || true
 
       - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: another-tgproxy-apk
+          name: another-tgproxy-android
           path: android-apks/*.apk
           if-no-files-found: warn
