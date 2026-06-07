@@ -162,12 +162,15 @@ jobs:
           # build types' manifests, so install it in each build-type source set.
           cp packaging/android/app/AndroidManifest-overlay.xml "$APP/src/debug/AndroidManifest.xml"
           cp packaging/android/app/AndroidManifest-overlay.xml "$APP/src/release/AndroidManifest.xml"
+          # Pixiewood's build stages the native libs + GTK runtime into the gradle
+          # project (and assembles debug). Always run it; for a signed release,
+          # assemble the release variant on top — it reuses those staged libs.
+          perl "$PW" build
           if [ -n "${ANDROID_KEYSTORE_B64:-}" ]; then
-            echo "::notice::keystore secret present — building release APK"
+            echo "::notice::keystore secret present — assembling release APK"
             ( cd .pixiewood/android && ./gradlew --no-daemon assembleRelease )
           else
-            echo "::warning::no ANDROID_KEYSTORE_B64 — building a debug-signed APK"
-            perl "$PW" build
+            echo "::warning::no ANDROID_KEYSTORE_B64 — shipping the debug APK"
           fi
 
       - name: Sign release APKs
