@@ -6,6 +6,9 @@ namespace Win {
     [CCode (cname = "tgws_win_pid")]
     public int pid ();
 
+    [CCode (cname = "tgws_win_open_uri")]
+    public void open_uri (string uri);
+
     [CCode (cname = "TgwsTrayCb", has_target = true)]
     public delegate void TrayCb (int action);
 

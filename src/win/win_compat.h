@@ -7,6 +7,10 @@ char *tgws_win_exe_path (void);
 /* PID of the current process. */
 int tgws_win_pid (void);
 
+/* Open a URI with the system default handler (ShellExecute). GIO's
+ * launch_default_for_uri doesn't resolve custom schemes like tg:// on Windows. */
+void tgws_win_open_uri (const char *uri);
+
 /* System-tray icon (Shell_NotifyIcon) with a right-click menu, living in the GUI
  * process. The callback fires on the GTK main thread; action: 0 open, 1 open in
  * Telegram, 2 toggle start/stop, 3 restart, 4 quit. Labels are UTF-8. */

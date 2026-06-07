@@ -28,6 +28,16 @@ tgws_win_pid (void)
   return (int) GetCurrentProcessId ();
 }
 
+void
+tgws_win_open_uri (const char *uri)
+{
+  wchar_t *w = (wchar_t *) g_utf8_to_utf16 (uri ? uri : "", -1, NULL, NULL, NULL);
+  if (w == NULL)
+    return;
+  ShellExecuteW (NULL, L"open", w, NULL, NULL, SW_SHOWNORMAL);
+  g_free (w);
+}
+
 /* ---- system-tray icon ---- */
 
 #define TGWS_TRAY_MSG (WM_APP + 1)

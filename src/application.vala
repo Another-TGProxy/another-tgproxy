@@ -131,6 +131,14 @@ namespace TgWsProxy {
             tray_service = new ServiceController (cfg);
             tray_client = new DaemonClient ();
             tray_client.status_changed.connect (on_tray_status);
+            // The daemon dropping (it quits on stop) means the proxy is gone; reset
+            // the tray so the menu offers Start again.
+            tray_client.connection_changed.connect ((connected) => {
+                if (connected) return;
+                tray_running = false;
+                if (tray != null)
+                    Mac.tray_update (tray, _("Another TGProxy — stopped"), 0);
+            });
             tray_client.start ();
             // The bundle's launcher points this at a template PNG of the app's
             // symbolic icon; empty in a dev run -> the shim falls back to a symbol.
@@ -187,6 +195,14 @@ namespace TgWsProxy {
             win_service = new ServiceController (cfg);
             win_client = new DaemonClient ();
             win_client.status_changed.connect (on_win_tray_status);
+            // The daemon dropping (it quits on stop) means the proxy is gone; reset
+            // the tray so the menu offers Start again.
+            win_client.connection_changed.connect ((connected) => {
+                if (connected) return;
+                win_running = false;
+                if (win_tray != null)
+                    Win.tray_update (win_tray, _("Another TGProxy — stopped"), 0);
+            });
             win_client.start ();
             win_tray = Win.tray_new (on_win_tray_action,
                 _("Open"), _("Open in Telegram"),
@@ -214,10 +230,8 @@ namespace TgWsProxy {
                 activate ();
                 break;
             case 1:   // Open in Telegram
-                if (win_link != "") {
-                    try { AppInfo.launch_default_for_uri (win_link, null); }
-                    catch (Error e) { warning ("open telegram: %s", e.message); }
-                }
+                if (win_link != "")
+                    Win.open_uri (win_link);   // GIO can't resolve tg:// on Windows
                 break;
             case 2:   // toggle start/stop
                 if (win_running) { win_client.send ("stop"); win_service.stop (); }
