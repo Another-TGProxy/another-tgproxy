@@ -23,17 +23,20 @@ jobs:
   build:
     runs-on: windows-latest
     # Authenticode signing via SignPath (free for OSS). Active only when the
-    # SignPath secrets are configured AND this is a release tag, so ordinary
-    # branch/PR builds stay green and unsigned. One-time setup on signpath.io:
+    # SignPath secrets are configured, on tags + main/devel pushes (not PRs or
+    # feature branches, to spare the OSS quota), so other builds stay green and
+    # unsigned. Tags use the release policy, branch builds the test policy.
+    # One-time setup on signpath.io:
     #   1. Create an org under the SignPath Foundation OSS program; install the
     #      SignPath GitHub App on this repo.
     #   2. Create a Project "another-tgproxy", an Artifact Configuration for the
-    #      uploaded .exe, and a "release-signing" Signing Policy.
+    #      uploaded .exe, and two Signing Policies: "release-signing" and
+    #      "test-signing".
     #   3. Add repo secret SIGNPATH_API_TOKEN (a CI user token) + repo variable
-    #      SIGNPATH_ORGANIZATION_ID. project-slug / signing-policy-slug below must
-    #      match what you named in SignPath.
+    #      SIGNPATH_ORGANIZATION_ID. project-slug / policy slugs below must match
+    #      what you named in SignPath.
     env:
-      SIGN: ${{ secrets.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/') }}
+      SIGN: ${{ secrets.SIGNPATH_API_TOKEN != '' && github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel') }}
     defaults:
       run:
         shell: msys2 {0}
@@ -81,16 +84,18 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: bash packaging/windows/bundle-windows.sh
 
-      - name: Upload installer
+      # Upload the unsigned build as the input SignPath signs from.
+      - name: Upload unsigned installer (SignPath input)
         id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: another-tgproxy-windows-x86_64
+          name: installer-unsigned
           path: AnotherTGProxy-*-windows-x86_64-setup.exe
-          retention-days: 14
+          retention-days: 1
 
-      # SignPath pulls the uploaded artifact, Authenticode-signs it and returns
-      # the signed installer; only runs on a release tag with secrets configured.
+      # SignPath pulls that artifact, Authenticode-signs it and returns the signed
+      # installer into signed/. Release tags use the release policy, branch builds
+      # the test policy.
       - name: Sign installer (SignPath)
         if: env.SIGN == 'true'
         uses: signpath/github-action-submit-signing-request@v1
@@ -99,19 +104,33 @@ jobs:
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           project-slug: another-tgproxy
-          signing-policy-slug: release-signing
+          signing-policy-slug: ${{ startsWith(github.ref, 'refs/tags/') && 'release-signing' || 'test-signing' }}
           github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
           wait-for-completion: true
           output-artifact-directory: signed
 
-      - name: Use the signed installer for the release
-        if: env.SIGN == 'true'
+      # The distributed artifact is the signed installer when signing ran, else
+      # the plain build output.
+      - name: Collect installer (prefer signed)
         shell: bash
-        run: cp -f signed/AnotherTGProxy-*-windows-x86_64-setup.exe ./
+        run: |
+          mkdir -p dist
+          if ls signed/*.exe >/dev/null 2>&1; then
+            cp signed/*.exe dist/
+          else
+            cp AnotherTGProxy-*-windows-x86_64-setup.exe dist/
+          fi
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: another-tgproxy-windows-x86_64
+          path: dist/*.exe
+          retention-days: 14
 
       - name: Release on tag
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: AnotherTGProxy-*-windows-x86_64-setup.exe
+          files: dist/*.exe
           prerelease: ${{ contains(github.ref_name, '-') }}
