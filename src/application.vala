@@ -47,6 +47,19 @@ namespace TgWsProxy {
                 return;
             }
 #endif
+            // A re-activation with a window already up means a second launch tried
+            // to start (forwarded here) — surface a "already running" note.
+            bool was_open = (this.active_window != null);
+            present_window ();
+#if WINDOWS || DARWIN
+            if (was_open)
+                show_already_running ();
+#endif
+        }
+
+        // Create the window if needed and bring it to the front (no warning); used
+        // for the normal launch and for the tray "Open" action.
+        public void present_window () {
             var win = this.active_window;
             if (win == null) {
                 win = new Window (this);
@@ -59,6 +72,20 @@ namespace TgWsProxy {
 #endif
             win.present ();
         }
+
+#if WINDOWS || DARWIN
+        void show_already_running () {
+            var win = this.active_window;
+            if (win == null)
+                return;
+            var dlg = new Adw.AlertDialog (
+                _("Already running"),
+                _("Another TGProxy is already open."));
+            dlg.add_response ("ok", _("OK"));
+            dlg.set_default_response ("ok");
+            dlg.present (win);
+        }
+#endif
 
 #if ANDROID
         static unowned Application? android_self = null;
@@ -142,7 +169,7 @@ namespace TgWsProxy {
             // symbolic icon; empty elsewhere -> themed/embedded icon fallback.
             var icon = Environment.get_variable ("ANOTHER_TGPROXY_TRAY_ICON") ?? "";
             tray = new TrayController (icon);
-            tray.open_requested.connect (() => activate ());
+            tray.open_requested.connect (() => present_window ());
             tray.open_telegram_requested.connect (() => {
                 if (tray_link == "") return;
                 // libstation resolves tg:// natively (GIO can't on Windows).

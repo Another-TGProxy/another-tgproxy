@@ -252,3 +252,18 @@ msgstr "Не удалось открыть образ диска: %s"
 
 msgid "Could not replace the AppImage"
 msgstr "Не удалось заменить AppImage"
+
+msgid "Already running"
+msgstr "Уже запущено"
+
+msgid "Another TGProxy is already open."
+msgstr "Another TGProxy уже открыт."
+
+msgid "OK"
+msgstr "ОК"
+
+msgid "An MTProto ↔ WebSocket proxy for Telegram."
+msgstr "Прокси MTProto ↔ WebSocket для Telegram."
+
+msgid "translator-credits"
+msgstr "Ampernic"

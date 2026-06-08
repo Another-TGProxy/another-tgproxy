@@ -35,6 +35,14 @@ int main (string[] args) {
     Environment.set_variable ("GIO_EXTRA_MODULES",
         Path.build_filename (win_root, "lib", "gio", "modules"), true);
 #endif
+#if DARWIN
+    // Relocatable .app: catalogs live in Contents/Resources/locale (the binary is
+    // in Contents/MacOS), not at the baked-in build-prefix LOCALEDIR.
+    var mac_res = Path.build_filename (
+        Path.get_dirname (Path.get_dirname (Station.get_executable_path () ?? "")),
+        "Resources");
+    localedir = Path.build_filename (mac_res, "locale");
+#endif
     Intl.bindtextdomain (Build.GETTEXT_PACKAGE, localedir);
     Intl.bind_textdomain_codeset (Build.GETTEXT_PACKAGE, "UTF-8");
     Intl.textdomain (Build.GETTEXT_PACKAGE);
@@ -56,6 +64,21 @@ int main (string[] args) {
 #endif
     Environment.set_application_name (Build.APP_NAME);
     Adw.init ();
+    // GTK and libadwaita bind their own gettext domains to the baked-in LOCALEDIR
+    // during init; in a relocatable bundle that path is the build prefix, so stock
+    // widget strings (e.g. the About dialog's Developer/Website labels) fall back
+    // to English. Re-point those domains at the bundled catalogs — after init, so
+    // this binding is the one that sticks.
+    bool bundled = appdir != null && appdir != "";
+#if WINDOWS || ANDROID || DARWIN
+    bundled = true;
+#endif
+    if (bundled) {
+        Intl.bindtextdomain ("gtk40", localedir);
+        Intl.bind_textdomain_codeset ("gtk40", "UTF-8");
+        Intl.bindtextdomain ("libadwaita", localedir);
+        Intl.bind_textdomain_codeset ("libadwaita", "UTF-8");
+    }
 #if WINDOWS
     // Autostart entry passes --minimized: start in the tray. Strip it so it
     // doesn't reach GApplication's option handling.

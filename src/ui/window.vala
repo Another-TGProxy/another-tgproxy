@@ -306,9 +306,11 @@ namespace TgWsProxy {
                 application_icon = Build.APP_ID_RELEVANT,
                 developer_name = "Ampernic",
                 version = Build.VERSION,
+                comments = _("An MTProto ↔ WebSocket proxy for Telegram."),
                 license_type = Gtk.License.GPL_3_0,
                 website = Build.HOMEPAGE,
-                issue_url = Build.BUGTRACKER
+                issue_url = Build.BUGTRACKER,
+                translator_credits = _("translator-credits")
             };
             about.present (this);
         }
