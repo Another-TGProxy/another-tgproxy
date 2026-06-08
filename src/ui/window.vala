@@ -168,10 +168,14 @@ namespace TgWsProxy {
         private void start_download () {
             if (updater == null || downloading)
                 return;
+            var dest = asset_dest ();
+            // The staging dir (e.g. the app's XDG_DATA_HOME on Android) may not
+            // exist yet; g_file_replace won't create it.
+            DirUtils.create_with_parents (Path.get_dirname (dest), 0755);
             downloading = true;
             if (dl_btn != null) { dl_btn.sensitive = false; dl_btn.label = _("Downloading…"); }
             if (dl_bar != null) { dl_bar.visible = true; dl_bar.fraction = 0; dl_bar.text = ""; }
-            updater.download (asset_url (), asset_dest ());
+            updater.download (asset_url (), dest);
         }
 
         private void on_dl_progress (double frac) {
