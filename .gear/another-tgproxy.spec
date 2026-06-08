@@ -2,7 +2,7 @@
 
 Name:           another-tgproxy
 Version:        2.0.0
-Release:        alt3
+Release:        alt1
 
 Summary:        GTK4 controller for the mtproxy-ws Telegram proxy
 License:        GPL-3.0-or-later
@@ -42,7 +42,7 @@ shareable tg:// link. The proxy engine itself comes from libmtproxyws.
 %setup
 
 %build
-%meson
+%meson -Drelease_version=%version
 %meson_build
 
 %install
@@ -63,15 +63,5 @@ shareable tg:// link. The proxy engine itself comes from libmtproxyws.
 %_datadir/icons/hicolor/*/apps/%app_id.png
 
 %changelog
-* Mon Jun 08 2026 Anton Politov <ampernic@altlinux.org> 2.0.0-alt3
-- Depend on the system libstation-1 pkg-config/vapi name.
-
-* Mon Jun 08 2026 Anton Politov <ampernic@altlinux.org> 2.0.0-alt2
-- New upstream snapshot: in-app updates, release channels, single-instance
-  handling and localized bundles.
-- Build the cross-platform helpers against the new libstation package
-  (BuildRequires: libstation-devel) instead of the in-tree backends.
-
-* Wed Jun 03 2026 Anton Politov <ampernic@altlinux.org> 2.0.0-alt1
+* Sun Jun 08 2026 Anton Politov <ampernic@altlinux.org> 2.0.0-alt1
 - Initial build for ALT.
-
