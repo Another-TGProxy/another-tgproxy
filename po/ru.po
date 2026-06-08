@@ -237,3 +237,18 @@ msgstr "Релиз"
 
 msgid "Beta"
 msgstr "Бета"
+
+msgid "Downloading…"
+msgstr "Скачивание…"
+
+msgid "Download failed: %s"
+msgstr "Не удалось скачать: %s"
+
+msgid "Could not start installer: %s"
+msgstr "Не удалось запустить установщик: %s"
+
+msgid "Could not open the disk image: %s"
+msgstr "Не удалось открыть образ диска: %s"
+
+msgid "Could not replace the AppImage"
+msgstr "Не удалось заменить AppImage"
