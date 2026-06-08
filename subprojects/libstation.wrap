@@ -8,4 +8,4 @@ revision = master
 depth = 1
 
 [provide]
-station-1 = station_dep
+libstation-1 = station_dep
