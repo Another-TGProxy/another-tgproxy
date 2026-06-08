@@ -155,7 +155,10 @@ namespace TgWsProxy {
 
         private string asset_dest () {
 #if ANDROID
-            var dir = Environment.get_user_cache_dir ();
+            // gdk-android points XDG_DATA_HOME at the app's external files dir
+            // (writable, and readable by our own installApk); the cache dir
+            // resolves to a bogus $HOME/.cache here.
+            var dir = Environment.get_user_data_dir ();
 #else
             var dir = Environment.get_tmp_dir ();
 #endif
