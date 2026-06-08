@@ -80,6 +80,13 @@ for dll in "$LOADERS_DST"/*.dll; do copy_dll_deps "$dll"; done
     | sed "s#.*/\([a-zA-Z0-9_-]*\.dll\)#\1#" \
     > "../loaders.cache" )
 
+# -- 3b. GIO modules (glib-networking = the TLS backend the update check needs) --
+info "Bundling GIO modules (TLS backend)..."
+GIO_MODULES="$DIST/lib/gio/modules"
+mkdir -p "$GIO_MODULES"
+cp "$PREFIX/lib/gio/modules/"*.dll "$GIO_MODULES/" 2>/dev/null || true
+for dll in "$GIO_MODULES"/*.dll; do [ -f "$dll" ] && copy_dll_deps "$dll"; done
+
 # -- 4. GSettings schemas -----------------------------------------------------
 info "Compiling GSettings schemas..."
 SCHEMAS="$DIST/share/glib-2.0/schemas"; mkdir -p "$SCHEMAS"
@@ -97,15 +104,19 @@ cp -r "$STAGE/share/icons/hicolor" "$ICONS/" 2>/dev/null || true
 "$PREFIX/bin/gtk4-update-icon-cache.exe" -q -t -f "$ICONS/Adwaita" || true
 "$PREFIX/bin/gtk4-update-icon-cache.exe" -q -t -f "$ICONS/hicolor" || true
 
-# -- 6. Translations (our domain + GTK's own) ---------------------------------
+# -- 6. Translations (our domain + GTK's and libadwaita's own) ----------------
+# libadwaita's catalog localizes the Adw widgets we use (e.g. the About dialog's
+# Developer/Website/Report-an-Issue labels); without it they stay English.
 info "Bundling translations..."
 mkdir -p "$DIST/share/locale"
 cp -r "$STAGE/share/locale/." "$DIST/share/locale/" 2>/dev/null || true
-for mo in "$PREFIX"/share/locale/*/LC_MESSAGES/gtk40.mo; do
-  [ -f "$mo" ] || continue
-  lang=$(basename "$(dirname "$(dirname "$mo")")")
-  mkdir -p "$DIST/share/locale/$lang/LC_MESSAGES"
-  cp "$mo" "$DIST/share/locale/$lang/LC_MESSAGES/"
+for domain in gtk40 libadwaita; do
+  for mo in "$PREFIX"/share/locale/*/LC_MESSAGES/$domain.mo; do
+    [ -f "$mo" ] || continue
+    lang=$(basename "$(dirname "$(dirname "$mo")")")
+    mkdir -p "$DIST/share/locale/$lang/LC_MESSAGES"
+    cp "$mo" "$DIST/share/locale/$lang/LC_MESSAGES/"
+  done
 done
 
 # -- 7. CA bundle (TLS verify for the CF path) --------------------------------

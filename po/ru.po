@@ -222,3 +222,48 @@ msgstr "Позже"
 
 msgid "Notification settings"
 msgstr "Настройки уведомлений"
+
+msgid "Details"
+msgstr "Подробнее"
+
+msgid "Update channel"
+msgstr "Канал обновлений"
+
+msgid "Which releases to be notified about"
+msgstr "О каких релизах уведомлять"
+
+msgid "Release"
+msgstr "Релиз"
+
+msgid "Beta"
+msgstr "Бета"
+
+msgid "Downloading…"
+msgstr "Скачивание…"
+
+msgid "Download failed: %s"
+msgstr "Не удалось скачать: %s"
+
+msgid "Could not start installer: %s"
+msgstr "Не удалось запустить установщик: %s"
+
+msgid "Could not open the disk image: %s"
+msgstr "Не удалось открыть образ диска: %s"
+
+msgid "Could not replace the AppImage"
+msgstr "Не удалось заменить AppImage"
+
+msgid "Already running"
+msgstr "Уже запущено"
+
+msgid "Another TGProxy is already open."
+msgstr "Another TGProxy уже открыт."
+
+msgid "OK"
+msgstr "ОК"
+
+msgid "An MTProto ↔ WebSocket proxy for Telegram."
+msgstr "Прокси MTProto ↔ WebSocket для Telegram."
+
+msgid "translator-credits"
+msgstr "Ampernic"

@@ -11,4 +11,7 @@
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <!-- LaunchServices activates the running app instead of starting a second
+       copy; GApplication enforces the same, this makes it explicit. -->
+  <key>LSMultipleInstancesProhibited</key><true/>
 </dict></plist>

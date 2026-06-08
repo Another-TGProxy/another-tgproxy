@@ -149,8 +149,17 @@ echo "    index.theme symbolic dirs: $(grep -c '^\[symbolic' "$RES/icons/Adwaita
   data/icons/hicolor/scalable/actions/another-tgproxy-symbolic.svg \
   -o "$RES/tray-icon.png" 2>/dev/null || true
 
-# translations
+# translations: our domain, plus GTK's and libadwaita's own catalogs so the
+# stock widgets (e.g. the About dialog labels) are localized, not English.
 cp -R "$INSTALL/share/locale" "$RES/" 2>/dev/null || true
+for domain in gtk40 libadwaita; do
+  for mo in "$BREW"/share/locale/*/LC_MESSAGES/$domain.mo; do
+    [ -f "$mo" ] || continue
+    lang=$(basename "$(dirname "$(dirname "$mo")")")
+    mkdir -p "$RES/locale/$lang/LC_MESSAGES"
+    cp "$mo" "$RES/locale/$lang/LC_MESSAGES/"
+  done
+done
 
 # -- 6. .icns from the app SVG -------------------------------------------------
 info "Generating .icns..."

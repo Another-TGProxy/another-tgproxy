@@ -15,9 +15,12 @@ namespace TgWsProxy {
         static double size_cap_mb = 5;
         static bool verbose = false;
         static int64 since_trim = 0;   // bytes written since the last cap check
+        static bool installed = false;       // a handler is already routing this process
+        static bool owns_rotation = true;    // this process trims/rotates the file
 
         public static void setup (Config cfg) {
-            if (!cfg.log_to_file) return;
+            if (installed || !cfg.log_to_file) return;
+            installed = true;
             Paths.ensure_dir ();
             size_cap_mb = cfg.log_max_mb;
             verbose = cfg.verbose;
@@ -42,6 +45,25 @@ namespace TgWsProxy {
                 trim_id = Timeout.add_seconds (120, () => { enforce_size (); return Source.CONTINUE; });
         }
 
+        // Lightweight attach for a process that doesn't own the log (the desktop
+        // GUI, while the daemon writes proxy.log in another process): route this
+        // process's own GLib output — e.g. the update check — to the same file so
+        // it shows in the in-app log, but leave session rotation to the owner. A
+        // no-op when a full setup() already installed a handler (Android is single
+        // -process, so the in-process EngineHost's setup() covers the GUI too).
+        public static void attach (Config cfg) {
+            if (installed || !cfg.log_to_file) return;
+            installed = true;
+            owns_rotation = false;
+            Paths.ensure_dir ();
+            size_cap_mb = cfg.log_max_mb;
+            verbose = cfg.verbose;
+            mtx.lock ();
+            logfp = FileStream.open (Paths.log_file (), "a");
+            mtx.unlock ();
+            Log.set_default_handler (handler);
+        }
+
         static void handler (string? domain, LogLevelFlags level, string msg) {
             // Drop DEBUG/INFO unless verbose — a replaced default handler bypasses
             // GLib's own G_MESSAGES_DEBUG gating, so without this every debug line
@@ -58,7 +80,7 @@ namespace TgWsProxy {
                 // Responsive cap: trim as soon as we've written ~cap bytes, so a
                 // burst can't blow far past the limit between the 120s ticks.
                 since_trim += line.length;
-                if (since_trim >= (int64) (size_cap_mb * 1024 * 1024))
+                if (owns_rotation && since_trim >= (int64) (size_cap_mb * 1024 * 1024))
                     trim_locked ();
             }
             mtx.unlock ();
