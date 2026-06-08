@@ -56,19 +56,57 @@ namespace TgWsProxy {
             // (Windows/macOS/Android/AppImage). Native/Flatpak Linux uses its repo.
             if (cfg.check_updates && Platform.get_default ().updates_relevant ()) {
                 updater = new Station.Updates ("Another-TGProxy/another-tgproxy", Build.VERSION);
+                // Channels this build offers; the prerelease keywords each accepts.
+                updater.add_channel ("stable", null);
+                updater.add_channel ("beta", { "beta", "rc", "alpha" });
+                // Empty config = track beta on a prerelease build, stable otherwise.
+                var ch = cfg.update_channel;
+                if (ch == "") ch = Build.VERSION.contains ("-") ? "beta" : "stable";
+                updater.set_channel (ch);
                 updater.available.connect (on_update_available);
-                update_banner.button_clicked.connect (open_update);
-                updater.check (Build.VERSION.contains ("-"));
+                update_banner.button_clicked.connect (() => show_update_dialog ());
+                updater.check ();
             }
         }
 
         private Station.Updates? updater = null;
         private string update_url = "";
+        private string update_version = "";
+        private string update_notes = "";
 
         private void on_update_available (string version, string url, string notes) {
             update_url = url;
+            update_version = version;
+            update_notes = notes;
             update_banner.title = _("Update available: %s").printf (version);
             update_banner.revealed = true;
+            show_update_dialog ();
+        }
+
+        // A dialog with the release notes and Later/Download. Reachable again via
+        // the banner button after it's dismissed.
+        private void show_update_dialog () {
+            if (update_url == "")
+                return;
+            var dlg = new Adw.AlertDialog (
+                _("Update available: %s").printf (update_version), null);
+            if (update_notes != "") {
+                var label = new Gtk.Label (update_notes) {
+                    wrap = true, xalign = 0, yalign = 0, selectable = true
+                };
+                dlg.extra_child = new Gtk.ScrolledWindow () {
+                    hscrollbar_policy = Gtk.PolicyType.NEVER,
+                    min_content_height = 140, max_content_height = 320,
+                    propagate_natural_height = true, child = label
+                };
+            }
+            dlg.add_response ("later", _("Later"));
+            dlg.add_response ("download", _("Download"));
+            dlg.set_response_appearance ("download", Adw.ResponseAppearance.SUGGESTED);
+            dlg.set_default_response ("download");
+            dlg.set_close_response ("later");
+            dlg.response.connect ((resp) => { if (resp == "download") open_update (); });
+            dlg.present (this);
         }
 
         private void open_update () {

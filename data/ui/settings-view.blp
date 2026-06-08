@@ -88,6 +88,14 @@ template $TgWsProxySettingsView : Adw.Bin {
           title: _("Check for updates");
           subtitle: _("Notify when a newer release is available");
         }
+
+        Adw.ComboRow channel_row {
+          title: _("Update channel");
+          subtitle: _("Which releases to be notified about");
+          model: Gtk.StringList {
+            strings [_("Release"), _("Beta")]
+          };
+        }
       }
 
       Adw.PreferencesGroup status_display_group {

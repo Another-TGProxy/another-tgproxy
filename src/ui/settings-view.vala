@@ -17,6 +17,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.SwitchRow verbose_row;
         [GtkChild] private unowned Adw.SwitchRow autostart_row;
         [GtkChild] private unowned Adw.SwitchRow updates_row;
+        [GtkChild] private unowned Adw.ComboRow channel_row;
         [GtkChild] private unowned Adw.PreferencesGroup status_display_group;
         [GtkChild] private unowned Adw.ToggleGroup status_mode_group;
         [GtkChild] private unowned Adw.PreferencesGroup status_text_group;
@@ -48,6 +49,10 @@ namespace TgWsProxy {
             autostart_row.active = service.is_autostart ();
             updates_row.active = cfg.check_updates;
             updates_row.visible = Platform.get_default ().updates_relevant ();
+            channel_row.visible = Platform.get_default ().updates_relevant ();
+            var ch = cfg.update_channel;
+            if (ch == "") ch = Build.VERSION.contains ("-") ? "beta" : "stable";
+            channel_row.selected = (ch == "beta") ? 1 : 0;
             status_row.text = cfg.status_template;
 
             regen_btn.clicked.connect (() => { secret_row.text = Config.gen_secret (); });
@@ -116,6 +121,7 @@ namespace TgWsProxy {
             cfg.log_to_file = logfile_row.active;
             cfg.verbose = verbose_row.active;
             cfg.check_updates = updates_row.active;
+            cfg.update_channel = (channel_row.selected == 1) ? "beta" : "stable";
             cfg.autostart = autostart_row.active;
             if (status_row.text.strip () != "") cfg.status_template = status_row.text.strip ();
             cfg.status_mode = status_mode_group.active_name ?? "auto";

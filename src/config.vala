@@ -38,6 +38,7 @@ namespace TgWsProxy {
         public int pool_size = 4;
         public double log_max_mb = 5;
         public bool check_updates = true;
+        public string update_channel = "";               // ""=auto by build; stable|beta
         public string appearance = "auto";               // auto|light|dark
         public bool tray = false;                         // Linux default off
         public bool autostart = false;
@@ -96,6 +97,7 @@ namespace TgWsProxy {
                 if (o.has_member ("pool_size")) c.pool_size = (int) o.get_int_member ("pool_size");
                 if (o.has_member ("log_max_mb")) c.log_max_mb = o.get_double_member ("log_max_mb");
                 if (o.has_member ("check_updates")) c.check_updates = o.get_boolean_member ("check_updates");
+                if (o.has_member ("update_channel")) c.update_channel = o.get_string_member ("update_channel");
                 if (o.has_member ("appearance")) c.appearance = o.get_string_member ("appearance");
                 if (o.has_member ("tray")) c.tray = o.get_boolean_member ("tray");
                 if (o.has_member ("autostart")) c.autostart = o.get_boolean_member ("autostart");
@@ -152,6 +154,7 @@ namespace TgWsProxy {
             b.set_member_name ("pool_size"); b.add_int_value (pool_size);
             b.set_member_name ("log_max_mb"); b.add_double_value (log_max_mb);
             b.set_member_name ("check_updates"); b.add_boolean_value (check_updates);
+            b.set_member_name ("update_channel"); b.add_string_value (update_channel);
             b.set_member_name ("appearance"); b.add_string_value (appearance);
             b.set_member_name ("tray"); b.add_boolean_value (tray);
             b.set_member_name ("autostart"); b.add_boolean_value (autostart);

@@ -222,3 +222,18 @@ msgstr "Позже"
 
 msgid "Notification settings"
 msgstr "Настройки уведомлений"
+
+msgid "Details"
+msgstr "Подробнее"
+
+msgid "Update channel"
+msgstr "Канал обновлений"
+
+msgid "Which releases to be notified about"
+msgstr "О каких релизах уведомлять"
+
+msgid "Release"
+msgstr "Релиз"
+
+msgid "Beta"
+msgstr "Бета"
