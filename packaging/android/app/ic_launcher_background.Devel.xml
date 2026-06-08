@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive-icon background for the DEVELOPMENT profile: the desktop .Devel
+     icon's "hazard tape" backdrop (yellow #F9C513 -> orange #E07A00 gradient with
+     dark diagonal stripes) instead of the release blue, so a dev APK's launcher
+     icon is unmistakable. CI uses this in place of ic_launcher_background.xml for
+     untagged builds; the white foreground glyphs are shared with the release icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <path android:pathData="M0,0h108v108h-108z">
+    <aapt:attr name="android:fillColor">
+      <gradient
+          android:type="linear"
+          android:startX="54" android:startY="0"
+          android:endX="54" android:endY="108"
+          android:startColor="#FFF9C513"
+          android:endColor="#FFE07A00"/>
+    </aapt:attr>
+  </path>
+  <!-- dark hazard stripes, 45 degrees, low opacity, behind the glyphs -->
+  <group android:rotation="45" android:pivotX="54" android:pivotY="54">
+    <path
+        android:fillColor="#3A2400"
+        android:fillAlpha="0.22"
+        android:pathData="M-80,-80h9v320h-9z M-60,-80h9v320h-9z M-40,-80h9v320h-9z M-20,-80h9v320h-9z M0,-80h9v320h-9z M20,-80h9v320h-9z M40,-80h9v320h-9z M60,-80h9v320h-9z M80,-80h9v320h-9z M100,-80h9v320h-9z M120,-80h9v320h-9z M140,-80h9v320h-9z"/>
+  </group>
+</vector>

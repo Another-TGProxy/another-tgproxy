@@ -149,6 +149,12 @@ jobs:
           # configures meson (it does so at generate), so the About dialog shows it.
           # Pixiewood drives meson itself, so we can't pass -Drelease_version.
           VERSION="${RELEASE_VERSION#v}"
+          # Adaptive-icon layers swap with the profile so a dev APK is distinct:
+          # release = blue background + plain monochrome; development = "hazard
+          # tape" background + monochrome with the same faint diagonal stripes
+          # (so even the themed/monochrome icon, which has no background, differs).
+          LAUNCHER_BG=ic_launcher_background.xml
+          LAUNCHER_MONO=foreground.xml
           if [ -n "$VERSION" ]; then
             sed -i "s|value: '',|value: '$VERSION',|" meson_options.txt
             grep -n "release_version" -A2 meson_options.txt
@@ -156,7 +162,16 @@ jobs:
             # Untagged branch build: development profile (.Devel icon/name +
             # striped header, separate config dir), set as the meson option default.
             sed -i "s|value: 'default',|value: 'development',|" meson_options.txt
+            LAUNCHER_BG=ic_launcher_background.Devel.xml
+            LAUNCHER_MONO=ic_launcher_monochrome.Devel.xml
           fi
+          # Stamp the AppStream metainfo (Pixiewood derives the APK versionName
+          # from its <release>) with the build version + date, never hardcoded.
+          MVER="$VERSION"
+          [ -n "$MVER" ] || MVER=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+          sed -i "s|@VERSION@|$MVER|; s|@DATE@|$(date +%F)|" \
+            packaging/android/app/space.ampernic.AnotherTGProxy.metainfo.xml
+          grep -n '<release ' packaging/android/app/space.ampernic.AnotherTGProxy.metainfo.xml
           # Run from the repo root: meson.build is here, so the manifest's src://
           # paths resolve against it.
           perl "$PW" prepare packaging/android/app/pixiewood.xml \
@@ -189,11 +204,11 @@ jobs:
           for aix in $(find .pixiewood -path '*mipmap*/ic_launcher*.xml'); do
             resdir="$(dirname "$(dirname "$aix")")"
             mkdir -p "$resdir/drawable"
-            cp packaging/android/app/foreground.xml "$resdir/drawable/ic_launcher_monochrome.xml"
+            cp "packaging/android/app/$LAUNCHER_MONO" "$resdir/drawable/ic_launcher_monochrome.xml"
             grep -q '<monochrome' "$aix" || sed -i \
               's#</adaptive-icon>#    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>\n</adaptive-icon>#' "$aix"
             # Gradient background (like the desktop icon) instead of the flat colour.
-            cp packaging/android/app/ic_launcher_background.xml "$resdir/drawable/ic_launcher_background.xml"
+            cp "packaging/android/app/$LAUNCHER_BG" "$resdir/drawable/ic_launcher_background.xml"
             sed -i 's#@color/ic_launcher_background#@drawable/ic_launcher_background#' "$aix"
           done
           echo "::group::launcher icon resources"

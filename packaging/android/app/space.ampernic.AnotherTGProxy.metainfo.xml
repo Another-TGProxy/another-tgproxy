@@ -18,7 +18,9 @@
   <requires>
     <internet bandwidth_mbitps="1">always</internet>
   </requires>
+  <!-- version/date are stamped by CI (android.yml) from the build version, since
+       Pixiewood derives the APK versionName from this; not hardcoded. -->
   <releases>
-    <release version="2.0.0" date="2026-06-04"/>
+    <release version="@VERSION@" date="@DATE@"/>
   </releases>
 </component>
