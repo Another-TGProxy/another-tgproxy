@@ -47,6 +47,11 @@ namespace TgWsProxy {
             service.failed.connect (present_error);
             client.start ();
 
+            // Route this (GUI) process's GLib output to proxy.log so the update
+            // check below is visible in the in-app log. No-op on Android, where the
+            // in-process EngineHost already set the logger up.
+            Logging.attach (cfg);
+
             // Notify about a newer GitHub release where no repo manages updates
             // (Windows/macOS/Android/AppImage). Native/Flatpak Linux uses its repo.
             if (cfg.check_updates && Platform.get_default ().updates_relevant ()) {
