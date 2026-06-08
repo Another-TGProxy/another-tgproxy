@@ -4,8 +4,10 @@ package space.ampernic.anothertgproxy;
 import android.app.Activity;
 import android.app.Application;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -63,7 +65,35 @@ public class ProxyApplication extends RuntimeApplication {
 	// still needs the REQUEST_INSTALL_PACKAGES permission for the prompt to show.
 	public static void installApk(Context ctx, String path) {
 		try {
-			PackageInstaller pi = ctx.getPackageManager().getPackageInstaller();
+			final Context app = ctx.getApplicationContext();
+			final String action = app.getPackageName() + ".INSTALL_STATUS";
+
+			// PackageInstaller doesn't pop the prompt itself: on commit the system
+			// sends STATUS_PENDING_USER_ACTION to our IntentSender, carrying the
+			// confirmation Intent we must startActivity() to show it.
+			final BroadcastReceiver[] holder = new BroadcastReceiver[1];
+			holder[0] = new BroadcastReceiver() {
+				@Override public void onReceive(Context c, Intent i) {
+					int status = i.getIntExtra(PackageInstaller.EXTRA_STATUS,
+							PackageInstaller.STATUS_FAILURE);
+					if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+						Intent confirm = i.getParcelableExtra(Intent.EXTRA_INTENT);
+						if (confirm != null) {
+							confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+							app.startActivity(confirm);
+						}
+					} else {
+						try { app.unregisterReceiver(holder[0]); } catch (Exception ignored) {}
+					}
+				}
+			};
+			IntentFilter filter = new IntentFilter(action);
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+				app.registerReceiver(holder[0], filter, Context.RECEIVER_NOT_EXPORTED);
+			else
+				app.registerReceiver(holder[0], filter);
+
+			PackageInstaller pi = app.getPackageManager().getPackageInstaller();
 			PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
 					PackageInstaller.SessionParams.MODE_FULL_INSTALL);
 			int sessionId = pi.createSession(params);
@@ -75,12 +105,11 @@ public class ProxyApplication extends RuntimeApplication {
 				while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
 				session.fsync(out);
 			}
-			Intent intent = new Intent(ctx, ProxyApplication.class)
-					.setAction("space.ampernic.anothertgproxy.INSTALL_RESULT");
+			Intent intent = new Intent(action).setPackage(app.getPackageName());
 			int flags = PendingIntent.FLAG_UPDATE_CURRENT;
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
 				flags |= PendingIntent.FLAG_MUTABLE;
-			PendingIntent pending = PendingIntent.getBroadcast(ctx, sessionId, intent, flags);
+			PendingIntent pending = PendingIntent.getBroadcast(app, sessionId, intent, flags);
 			session.commit(pending.getIntentSender());
 			session.close();
 		} catch (Exception e) {
