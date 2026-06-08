@@ -17,68 +17,40 @@ namespace TgWsProxy {
         public signal void status_changed (Status status);
         public signal void failed (string message);
 
-        Config cfg;
-        Engine? engine = null;
-        string last_error = "";
+        // Engine lifecycle is the shared EngineRunner; this host adds the 1s status
+        // poll + the foreground-service notification (the Android status display).
+        EngineRunner runner = new EngineRunner ();
         uint poll_id = 0;
-        GenericArray<Engine> retired = new GenericArray<Engine> ();
 
         construct {
-            cfg = Config.load ();
             // No daemon on Android to capture the engine's GLib log output; the
             // shared logger routes it to proxy.log (with the same rotation).
-            Logging.setup (cfg);
+            Logging.setup (runner.cfg);
         }
 
-        public bool running { get { return engine != null; } }
+        public bool running { get { return runner.running; } }
 
         public void start () {
-            if (engine != null) return;
-            cfg = Config.load ();
-            engine = new Engine (cfg.host, (uint16) cfg.port, cfg.secret_bytes ());
-            cfg.configure_engine (engine);
-            if (!engine.start ()) {
-                engine = null;
-                last_error = _("Failed to bind %s:%d — port already in use").printf (
-                    cfg.host, cfg.port);
-                failed (last_error);
+            if (runner.running) return;
+            if (!runner.start ()) {
+                failed (runner.error);
                 push ();
                 return;
             }
-            last_error = "";
             if (poll_id == 0)
                 poll_id = Timeout.add_seconds (1, () => { push (); return Source.CONTINUE; });
             push ();
         }
 
         public void stop () {
-            if (engine != null) {
-                engine.stop ();
-                // Detached client threads may still hold it; keep it alive.
-                retired.add ((owned) engine);
-                engine = null;
-            }
+            runner.stop ();
             if (poll_id != 0) { Source.remove (poll_id); poll_id = 0; }
             push ();
         }
 
         public void reload () { stop (); start (); }
 
-        public Status snapshot () {
-            var s = new Status ();
-            s.host = cfg.host;
-            s.port = cfg.port;
-            s.secret = cfg.secret;
-            s.running = engine != null;
-            s.error = last_error;
-            if (engine != null) {
-                s.conn_total = engine.connections_total ();
-                s.conn_active = engine.connections_active ();
-                s.bytes_up = engine.bytes_up ();
-                s.bytes_down = engine.bytes_down ();
-            }
-            return s;
-        }
+        public Status snapshot () { return runner.snapshot (); }
 
         string last_notif = "";
 
@@ -88,13 +60,13 @@ namespace TgWsProxy {
 
             // The foreground-service notification is the Android status display;
             // keep it in step with the live stats (only re-post on change).
-            var text = engine != null
-                ? s.format (cfg.status_template.length > 0 ? cfg.status_template
-                            : "Telegram · {active} conn. · ↑{up} ↓{down}")
+            var tmpl = runner.cfg.status_template;
+            var text = runner.running
+                ? s.format (tmpl.length > 0 ? tmpl : "Telegram · {active} conn. · ↑{up} ↓{down}")
                 : _("Proxy stopped");
             if (text != last_notif) {
                 last_notif = text;
-                TgwsAndroid.set_notification_text (text);
+                Station.android_foreground_set_text (text);
             }
         }
     }

@@ -14,7 +14,9 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.SwitchRow verify_cf_row;
         [GtkChild] private unowned Adw.SpinRow pool_row;
         [GtkChild] private unowned Adw.SwitchRow logfile_row;
+        [GtkChild] private unowned Adw.SwitchRow verbose_row;
         [GtkChild] private unowned Adw.SwitchRow autostart_row;
+        [GtkChild] private unowned Adw.SwitchRow updates_row;
         [GtkChild] private unowned Adw.PreferencesGroup status_display_group;
         [GtkChild] private unowned Adw.ToggleGroup status_mode_group;
         [GtkChild] private unowned Adw.PreferencesGroup status_text_group;
@@ -42,7 +44,10 @@ namespace TgWsProxy {
             verify_cf_banner.revealed = !cfg.verify_cf;
             pool_row.value = cfg.pool_size;
             logfile_row.active = cfg.log_to_file;
+            verbose_row.active = cfg.verbose;
             autostart_row.active = service.is_autostart ();
+            updates_row.active = cfg.check_updates;
+            updates_row.visible = Platform.get_default ().updates_relevant ();
             status_row.text = cfg.status_template;
 
             regen_btn.clicked.connect (() => { secret_row.text = Config.gen_secret (); });
@@ -68,7 +73,7 @@ namespace TgWsProxy {
                 var win = get_root () as Gtk.Window;
                 if (win == null) return;
                 var surface = win.get_surface ();
-                if (surface != null) TgwsAndroid.open_notification_settings (surface);
+                if (surface != null) Station.android_open_notification_settings (surface);
             });
 #else
             notif_settings_row.visible = false;
@@ -109,6 +114,8 @@ namespace TgWsProxy {
             cfg.verify_cf = verify_cf_row.active;
             cfg.pool_size = (int) pool_row.value;
             cfg.log_to_file = logfile_row.active;
+            cfg.verbose = verbose_row.active;
+            cfg.check_updates = updates_row.active;
             cfg.autostart = autostart_row.active;
             if (status_row.text.strip () != "") cfg.status_template = status_row.text.strip ();
             cfg.status_mode = status_mode_group.active_name ?? "auto";

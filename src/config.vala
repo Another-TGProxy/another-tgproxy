@@ -10,14 +10,6 @@ namespace TgWsProxy {
         public string config_file () {
             return Path.build_filename (app_dir (), "config.json");
         }
-        public string control_sock () {
-            return Path.build_filename (app_dir (), "control.sock");
-        }
-        // Windows has no Unix sockets: the daemon listens on a loopback TCP port
-        // and writes the chosen port + an auth token here for the GUI to read.
-        public string control_json () {
-            return Path.build_filename (app_dir (), "control.json");
-        }
         public string pid_file () {
             return Path.build_filename (app_dir (), "daemon.pid");
         }
@@ -78,6 +70,7 @@ namespace TgWsProxy {
                 c.save ();
                 return c;
             }
+            bool parsed = false;
             try {
                 var parser = new Json.Parser ();
                 parser.load_from_file (path);
@@ -110,10 +103,15 @@ namespace TgWsProxy {
                     c.status_template = o.get_string_member ("status_template");
                 if (o.has_member ("status_mode"))
                     c.status_mode = o.get_string_member ("status_mode");
+                parsed = true;
             } catch (Error e) {
                 warning ("config load failed: %s", e.message);
             }
-            if (c.secret.length != 32) {
+            // Only (re)generate + persist the secret when the file genuinely
+            // parsed but lacks a valid one. On a read/parse failure, keep defaults
+            // in memory and DON'T save — overwriting here would destroy a config
+            // that merely failed to read (e.g. mid-write or a transient FS error).
+            if (parsed && c.secret.length != 32) {
                 c.secret = gen_secret ();
                 c.save ();
             }
@@ -188,6 +186,7 @@ namespace TgWsProxy {
                 if (d.strip () != "") e.add_worker_domain (d.strip ());
             e.set_fake_tls (fake_tls_domain.strip ());
             e.set_pool_size (pool_size);
+            e.set_verbose (verbose);
         }
     }
 }

@@ -27,10 +27,10 @@ jobs:
         shell: msys2 {0}
     steps:
       - name: Checkout GUI
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout core (mtproxy-ws)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: Another-TGProxy/mtproxy-ws
           path: _core
@@ -42,6 +42,7 @@ jobs:
           update: true
           install: >-
             zip
+            git
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-meson
             mingw-w64-ucrt-x86_64-ninja
@@ -68,16 +69,53 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: bash packaging/windows/bundle-windows.sh
 
+      # Upload the unsigned build as the input SignPath signs from.
+      - name: Upload unsigned installer (SignPath input)
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-unsigned
+          path: AnotherTGProxy-*-windows-x86_64-setup.exe
+          retention-days: 1
+
+      # SignPath pulls that artifact, Authenticode-signs it and returns the signed
+      # installer into signed/. Release tags use the release policy, branch builds
+      # the test policy.
+      - name: Sign installer (SignPath)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          project-slug: another-tgproxy
+          signing-policy-slug: ${{ startsWith(github.ref, 'refs/tags/') && 'release-signing' || 'test-signing' }}
+          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      # The distributed artifact is the signed installer when signing ran, else
+      # the plain build output.
+      - name: Collect installer (prefer signed)
+        shell: bash
+        run: |
+          mkdir -p dist
+          if ls signed/*.exe >/dev/null 2>&1; then
+            cp signed/*.exe dist/
+          else
+            cp AnotherTGProxy-*-windows-x86_64-setup.exe dist/
+          fi
+
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: another-tgproxy-windows-x86_64
-          path: AnotherTGProxy-*-windows-x86_64-setup.exe
+          path: dist/*.exe
           retention-days: 14
 
       - name: Release on tag
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: AnotherTGProxy-*-windows-x86_64-setup.exe
+          files: dist/*.exe
           prerelease: ${{ contains(github.ref_name, '-') }}

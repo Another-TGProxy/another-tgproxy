@@ -37,10 +37,10 @@ jobs:
             gsettings-desktop-schemas libgtk-4-bin
 
       - name: Checkout GUI
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout core (mtproxy-ws)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: Another-TGProxy/mtproxy-ws
           path: _core
@@ -67,6 +67,9 @@ jobs:
           chmod +x sharun
           # lib4bin pulls the binary + every shared lib it needs — including glibc and
           # the dynamic loader — into AppDir/shared, so the AppImage runs on older glibc.
+          # libstation is a vendored subproject installed only inside AppDir (not on
+          # the host), so expose AppDir's libdir to ldd or lib4bin can't resolve it.
+          export LD_LIBRARY_PATH="$PWD/AppDir/usr/lib/$ARCH-linux-gnu:$PWD/AppDir/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           ./sharun lib4bin --hard-links --with-hooks --strip --gen-lib-path --dst-dir AppDir \
             AppDir/usr/bin/another-tgproxy \
             /usr/lib/$ARCH-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders/*.so \
@@ -91,7 +94,7 @@ jobs:
           ls -la "$OUT"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: another-tgproxy-linux-x86_64
           path: ${{ env.OUT }}

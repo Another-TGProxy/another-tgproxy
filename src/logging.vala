@@ -13,11 +13,14 @@ namespace TgWsProxy {
         static FileStream? logfp = null;
         static uint trim_id = 0;
         static double size_cap_mb = 5;
+        static bool verbose = false;
+        static int64 since_trim = 0;   // bytes written since the last cap check
 
         public static void setup (Config cfg) {
             if (!cfg.log_to_file) return;
             Paths.ensure_dir ();
             size_cap_mb = cfg.log_max_mb;
+            verbose = cfg.verbose;
 
             // Keep only the most recent existing session; appending this run's
             // marker below then leaves the file holding the last two sessions.
@@ -40,11 +43,24 @@ namespace TgWsProxy {
         }
 
         static void handler (string? domain, LogLevelFlags level, string msg) {
+            // Drop DEBUG/INFO unless verbose — a replaced default handler bypasses
+            // GLib's own G_MESSAGES_DEBUG gating, so without this every debug line
+            // would hit the file.
+            if (!verbose && (level & (LogLevelFlags.LEVEL_DEBUG | LogLevelFlags.LEVEL_INFO)) != 0)
+                return;
             var line = "%s  %s\n".printf (
                 new DateTime.now_local ().format ("%H:%M:%S"), msg);
             stderr.printf ("%s", line);
             mtx.lock ();
-            if (logfp != null) { logfp.puts (line); logfp.flush (); }
+            if (logfp != null) {
+                logfp.puts (line);
+                logfp.flush ();
+                // Responsive cap: trim as soon as we've written ~cap bytes, so a
+                // burst can't blow far past the limit between the 120s ticks.
+                since_trim += line.length;
+                if (since_trim >= (int64) (size_cap_mb * 1024 * 1024))
+                    trim_locked ();
+            }
             mtx.unlock ();
         }
 
@@ -62,27 +78,41 @@ namespace TgWsProxy {
         }
 
         static void enforce_size () {
+            mtx.lock ();
+            trim_locked ();
+            mtx.unlock ();
+        }
+
+        // Cap the file to ~size_cap_mb by keeping only its tail. Reads at most
+        // `cap` bytes (not the whole file), so memory stays bounded no matter how
+        // large the file grew. Caller must hold mtx.
+        static void trim_locked () {
+            since_trim = 0;
             int64 cap = (int64) (size_cap_mb * 1024 * 1024);
             if (cap <= 0) return;
             var path = Paths.log_file ();
             Posix.Stat st;
-            if (Posix.stat (path, out st) != 0 || st.st_size <= cap) return;
+            if (Posix.stat (path, out st) != 0 || (int64) st.st_size <= cap) return;
 
-            mtx.lock ();
-            string contents;
-            bool ok = false;
-            try { FileUtils.get_contents (path, out contents); ok = true; }
-            catch (Error e) { }
-            if (ok) {
-                int start = (int) (contents.length - cap);
-                if (start < 0) start = 0;
-                int nl = contents.index_of_char ('\n', start);
-                string kept = (nl >= 0) ? contents.substring (nl + 1) : contents.substring (start);
-                logfp = null;   // close before rewriting
-                try { FileUtils.set_contents (path, kept); } catch (Error e) { }
-                logfp = FileStream.open (path, "a");
-            }
-            mtx.unlock ();
+            var rf = FileStream.open (path, "r");
+            if (rf == null) return;
+            rf.seek ((long) ((int64) st.st_size - cap), FileSeek.SET);
+            var buf = new uint8[(int) cap];
+            size_t n = rf.read (buf);
+            rf = null;
+            if (n == 0) return;
+
+            // Start at the first line boundary so we don't keep a partial line.
+            size_t begin = 0;
+            for (size_t i = 0; i < n; i++)
+                if (buf[i] == '\n') { begin = i + 1; break; }
+
+            logfp = null;   // close the append handle before truncating
+            var wf = FileStream.open (path, "w");
+            if (wf != null && n > begin)
+                wf.write (buf[begin : n]);
+            wf = null;
+            logfp = FileStream.open (path, "a");
         }
     }
 }

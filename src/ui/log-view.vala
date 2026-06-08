@@ -14,6 +14,7 @@ namespace TgWsProxy {
 
         private bool follow = true;
         private int64 read_pos = 0;
+        private uint tail_id = 0;
 
         construct {
             var vadj = scrolled.vadjustment;
@@ -26,11 +27,23 @@ namespace TgWsProxy {
             vadj.value_changed.connect (() => {
                 follow = vadj.value >= vadj.upper - vadj.page_size - 1.0;
             });
+
+            // Tail only while the view is mapped (its ViewStack page is shown):
+            // this stops the 1s poll when another tab is up and — crucially —
+            // when the window is destroyed, so the timer can't outlive the widget
+            // and fire into a disposed TextView.
+            map.connect (() => {
+                refresh ();
+                if (tail_id == 0)
+                    tail_id = Timeout.add_seconds (1, () => { refresh (); return Source.CONTINUE; });
+            });
+            unmap.connect (() => {
+                if (tail_id != 0) { Source.remove (tail_id); tail_id = 0; }
+            });
         }
 
         public void start () {
             refresh ();
-            Timeout.add_seconds (1, () => { refresh (); return Source.CONTINUE; });
         }
 
         // Append only what was added since the last read (so scrolling stays put

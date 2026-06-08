@@ -195,7 +195,7 @@ namespace TgWsProxy {
         }
 
         static string daemon_exec () {
-            return Win.exe_path ();
+            return Station.get_executable_path () ?? "another-tgproxy.exe";
         }
 #else
         // Ask the daemon to quit via its exported GAction (org.freedesktop.Application).
@@ -375,11 +375,7 @@ namespace TgWsProxy {
             var appimage = Environment.get_variable ("APPIMAGE");
             if (appimage != null && appimage != "")
                 return appimage;
-            try {
-                return FileUtils.read_link ("/proc/self/exe");
-            } catch (Error e) {
-                return "another-tgproxy";
-            }
+            return Station.get_executable_path () ?? "another-tgproxy";
         }
 #endif
 #endif

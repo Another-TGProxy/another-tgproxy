@@ -7,6 +7,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.ToastOverlay toast_overlay;
         [GtkChild] private unowned Adw.Banner conn_banner;
         [GtkChild] private unowned Adw.Banner err_banner;
+        [GtkChild] private unowned Adw.Banner update_banner;
         [GtkChild] private unowned HomeView home_view;
         [GtkChild] private unowned SettingsView settings_view;
         [GtkChild] private unowned LogView log_view;
@@ -45,6 +46,44 @@ namespace TgWsProxy {
             client.status_changed.connect (on_status);
             service.failed.connect (present_error);
             client.start ();
+
+            // Notify about a newer GitHub release where no repo manages updates
+            // (Windows/macOS/Android/AppImage). Native/Flatpak Linux uses its repo.
+            if (cfg.check_updates && Platform.get_default ().updates_relevant ()) {
+                updater = new Station.Updates ("Another-TGProxy/another-tgproxy", Build.VERSION);
+                updater.available.connect (on_update_available);
+                update_banner.button_clicked.connect (open_update);
+                updater.check (Build.VERSION.contains ("-"));
+            }
+        }
+
+        private Station.Updates? updater = null;
+        private string update_url = "";
+
+        private void on_update_available (string version, string url, string notes) {
+            update_url = url;
+            update_banner.title = _("Update available: %s").printf (version);
+            update_banner.revealed = true;
+        }
+
+        private void open_update () {
+            if (update_url == "")
+                return;
+#if ANDROID
+            var s = get_surface ();
+            if (s != null) Station.android_open_uri (s, update_url);
+#else
+            try { Station.open_uri (update_url); }
+            catch (Error e) { warning ("open release page: %s", e.message); }
+#endif
+        }
+
+        // On macOS/Windows the app lives on in the tray after the window is
+        // destroyed; stop this window's control client so its reconnect loop and
+        // socket don't linger until finalization.
+        public override void dispose () {
+            if (client != null) client.stop ();
+            base.dispose ();
         }
 
         private void toast (string msg) {
