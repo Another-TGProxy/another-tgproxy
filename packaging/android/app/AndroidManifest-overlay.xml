@@ -14,6 +14,11 @@
 
     <application android:name="space.ampernic.anothertgproxy.ProxyApplication"
                  tools:replace="android:name">
+        <!-- One task only: relaunching from the launcher brings the existing
+             instance forward instead of starting a second copy. -->
+        <activity android:name="org.gtk.android.ToplevelActivity"
+                  android:launchMode="singleTask"
+                  tools:replace="android:launchMode"/>
         <service android:name="space.ampernic.anothertgproxy.ProxyService"
                  android:exported="false"
                  android:foregroundServiceType="specialUse">
