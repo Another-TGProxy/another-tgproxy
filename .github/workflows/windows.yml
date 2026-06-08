@@ -2,7 +2,7 @@ name: Windows
 
 on:
   push:
-    branches: ['**']
+    branches: [main, devel]
     tags: ['v*']
     paths: &paths
       - 'src/**'
@@ -16,12 +16,22 @@ on:
     paths: *paths
   workflow_dispatch:
 
+# One run per branch; a new push cancels the previous build. Tags (releases) are
+# never cancelled so a release build always completes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 permissions:
   contents: write
 
 jobs:
   build:
     runs-on: windows-latest
+    # Authenticode signing runs only when the SignPath token secret is present;
+    # without it the build still produces an (unsigned) installer.
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     defaults:
       run:
         shell: msys2 {0}
@@ -79,7 +89,7 @@ jobs:
       # installer into signed/. Release tags use the release policy, branch builds
       # the test policy.
       - name: Sign installer (SignPath)
-        if: env.SIGN == 'true'
+        if: env.SIGNPATH_API_TOKEN != ''
         uses: signpath/github-action-submit-signing-request@v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}

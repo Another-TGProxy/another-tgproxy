@@ -2,7 +2,7 @@ name: macOS
 
 on:
   push:
-    branches: ['**']
+    branches: [main, devel]
     tags: ['v*']
     paths: &paths
       - 'src/**'
@@ -15,6 +15,12 @@ on:
   pull_request:
     paths: *paths
   workflow_dispatch:
+
+# One run per branch; a new push cancels the previous build. Tags (releases) are
+# never cancelled so a release build always completes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: write

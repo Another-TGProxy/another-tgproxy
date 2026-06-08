@@ -9,6 +9,11 @@ on:
   push:
     tags: ['v*']
 
+# Never cancel a release in flight (tags only); serialize per tag.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   actions: read

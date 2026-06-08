@@ -8,6 +8,8 @@ name: Android (experimental)
 on:
   workflow_dispatch:
   push:
+    branches: [main, devel]
+    tags: ['v*']
     paths:
       - 'src/**'
       - 'data/**'
@@ -16,6 +18,12 @@ on:
       - 'subprojects/**'
       - 'packaging/android/**'
       - '.github/workflows/android.yml'
+
+# One run per branch; a new push cancels the previous build. Tags (releases) are
+# never cancelled so a release build always completes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: write   # attach the APK to the release on tag
