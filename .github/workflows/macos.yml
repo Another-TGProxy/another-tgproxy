@@ -53,7 +53,7 @@ jobs:
           brew install \
             meson ninja pkg-config \
             vala blueprint-compiler \
-            gtk4 libadwaita json-glib \
+            gtk4 libadwaita json-glib glib-networking \
             openssl@3 gettext \
             adwaita-icon-theme librsvg \
             dylibbundler create-dmg desktop-file-utils
@@ -79,7 +79,7 @@ jobs:
           arch -x86_64 /usr/local/bin/brew install \
             meson ninja pkg-config \
             vala blueprint-compiler \
-            gtk4 libadwaita json-glib \
+            gtk4 libadwaita json-glib glib-networking \
             openssl@3 gettext \
             adwaita-icon-theme librsvg \
             dylibbundler create-dmg desktop-file-utils || true

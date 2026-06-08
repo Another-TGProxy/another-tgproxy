@@ -80,6 +80,13 @@ for dll in "$LOADERS_DST"/*.dll; do copy_dll_deps "$dll"; done
     | sed "s#.*/\([a-zA-Z0-9_-]*\.dll\)#\1#" \
     > "../loaders.cache" )
 
+# -- 3b. GIO modules (glib-networking = the TLS backend the update check needs) --
+info "Bundling GIO modules (TLS backend)..."
+GIO_MODULES="$DIST/lib/gio/modules"
+mkdir -p "$GIO_MODULES"
+cp "$PREFIX/lib/gio/modules/"*.dll "$GIO_MODULES/" 2>/dev/null || true
+for dll in "$GIO_MODULES"/*.dll; do [ -f "$dll" ] && copy_dll_deps "$dll"; done
+
 # -- 4. GSettings schemas -----------------------------------------------------
 info "Compiling GSettings schemas..."
 SCHEMAS="$DIST/share/glib-2.0/schemas"; mkdir -p "$SCHEMAS"

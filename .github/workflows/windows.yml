@@ -52,6 +52,7 @@ jobs:
             mingw-w64-ucrt-x86_64-gtk4
             mingw-w64-ucrt-x86_64-libadwaita
             mingw-w64-ucrt-x86_64-json-glib
+            mingw-w64-ucrt-x86_64-glib-networking
             mingw-w64-ucrt-x86_64-openssl
             mingw-w64-ucrt-x86_64-ca-certificates
             mingw-w64-ucrt-x86_64-librsvg

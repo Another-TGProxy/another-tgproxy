@@ -30,6 +30,10 @@ int main (string[] args) {
     // the catalogs next to the exe — <root>/share/locale (exe lives in <root>/bin).
     var win_root = Path.get_dirname (Path.get_dirname (Station.get_executable_path () ?? ""));
     localedir = Path.build_filename (win_root, "share", "locale");
+    // Point GIO at the bundled modules (glib-networking, the TLS backend the
+    // update check needs over HTTPS) — the baked-in module dir is the CI prefix.
+    Environment.set_variable ("GIO_EXTRA_MODULES",
+        Path.build_filename (win_root, "lib", "gio", "modules"), true);
 #endif
     Intl.bindtextdomain (Build.GETTEXT_PACKAGE, localedir);
     Intl.bind_textdomain_codeset (Build.GETTEXT_PACKAGE, "UTF-8");
