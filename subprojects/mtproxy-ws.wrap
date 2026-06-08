@@ -1,12 +1,14 @@
-# The C proxy engine. On desktop the GUI builds against the installed mtproxy-ws
-# package (pkg-config); this wrap is the fallback for builds with no system core —
-# notably the Android cross build, where the engine is compiled in-tree and the
-# whole app is one process. The core's meson.build calls override_dependency() and
-# exposes its vapidir, so dependency('mtproxy-ws', fallback: [...]) resolves here.
+# The C proxy engine, vendored as a meson subproject and built from source in
+# every bundled build (AppImage, Windows, macOS, Android, Flatpak) — none of
+# those platforms ship a system mtproxy-ws. The ALT build is the exception: it
+# BuildRequires libmtproxyws-devel, so pkg-config finds the system package first
+# and this fallback is never used (hasher has no network and still builds fine).
+#
+# revision is pinned to an exact commit so a GUI tag builds one deterministic
+# core on every platform. Bump it deliberately via tools/pin-deps.sh.
 [wrap-git]
 url = https://github.com/Another-TGProxy/mtproxy-ws.git
-revision = main
-depth = 1
+revision = 16b00beceaaa79fc6c5583923c60febc9922d48d
 
 [provide]
 mtproxy-ws = mtproxyws_dep

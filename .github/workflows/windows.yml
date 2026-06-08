@@ -29,12 +29,9 @@ jobs:
       - name: Checkout GUI
         uses: actions/checkout@v6
 
-      - name: Checkout core (mtproxy-ws)
-        uses: actions/checkout@v6
-        with:
-          repository: Another-TGProxy/mtproxy-ws
-          path: _core
-
+      # core (mtproxy-ws) + libstation are vendored meson subprojects pinned in
+      # subprojects/*.wrap and built in-tree during the GUI build; no separate
+      # core checkout.
       - name: Set up MSYS2 (ucrt64)
         uses: msys2/setup-msys2@v2
         with:
@@ -65,7 +62,6 @@ jobs:
 
       - name: Build app + installer (setup)
         env:
-          CORE_SRC: _core
           MAKENSIS: /c/Program Files (x86)/NSIS/makensis.exe
           RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: bash packaging/windows/bundle-windows.sh
@@ -113,10 +109,4 @@ jobs:
           name: another-tgproxy-windows-x86_64
           path: dist/*.exe
           retention-days: 14
-
-      - name: Release on tag
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.exe
-          prerelease: ${{ contains(github.ref_name, '-') }}
+        # On a tag, release.yml collects this artifact and publishes the release.

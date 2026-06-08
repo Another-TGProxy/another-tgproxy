@@ -1,19 +1,29 @@
 #!/usr/bin/env bash
 # Build another-tgproxy and assemble a self-contained .app + .dmg for macOS.
-# Expects core (mtproxy-ws) sources under $CORE_SRC (default ../_core) and runs
-# from the gui repo root. Homebrew provides gtk4/libadwaita/vala/etc.
+# The mtproxy-ws core and libstation are vendored meson subprojects
+# (subprojects/*.wrap, pinned) built in-tree by the GUI's meson setup; runs from
+# the gui repo root. Homebrew provides gtk4/libadwaita/vala/etc.
 set -euo pipefail
 SELF="$(cd "$(dirname "$0")" && pwd)"   # packaging/macos (holds Info.plist.in, launcher)
 cd "$SELF/../.."                        # gui repo root
 
 BREW="$(brew --prefix)"
-CORE_SRC="${CORE_SRC:-_core}"
-INSTALL="$PWD/_install"          # staging prefix for core + gui
+INSTALL="$PWD/_install"          # staging prefix (gui + vendored subprojects)
 DIST="$PWD/dist"
 
 APP_NAME="Another TGProxy"
 BIN="another-tgproxy"
 APP_ID="space.ampernic.AnotherTGProxy"
+# A tag is a release; an untagged branch build is "development" — a distinct
+# app-id/name and the .Devel icon (meson installs it under the .Devel app-id),
+# so a devel .app never poses as the release.
+if [ -n "${RELEASE_VERSION:-}" ]; then
+  PROFILE=default
+else
+  PROFILE=development
+  APP_ID="$APP_ID.Devel"
+  APP_NAME="$APP_NAME (Devel)"
+fi
 APP="$DIST/$APP_NAME.app"
 CONTENTS="$APP/Contents"
 MACOS="$CONTENTS/MacOS"
@@ -54,18 +64,14 @@ if [ -d "$VAPI_DST" ]; then
   done
 fi
 
-# -- 1. Build core + gui into the staging prefix -------------------------------
-info "Building core (mtproxy-ws)..."
-rm -rf "$INSTALL"
-meson setup "$CORE_SRC/_b" "$CORE_SRC" --prefix="$INSTALL" --buildtype=release -Dservice=false
-meson install -C "$CORE_SRC/_b"
-
+# -- 1. Build gui (+ vendored core/libstation subprojects) into staging --------
 info "Building gui (another-tgproxy)..."
+rm -rf "$INSTALL"
 # Displayed/file version: the release tag (RELEASE_VERSION, set by CI on a tag,
 # leading "v" stripped) else the meson.build project version.
 APP_VERSION="${RELEASE_VERSION#v}"
 [ -n "$APP_VERSION" ] || APP_VERSION="$(awk -F\' '/version:/{print $2; exit}' meson.build)"
-meson setup build --prefix="$INSTALL" --buildtype=release -Drelease_version="$APP_VERSION"
+meson setup build --prefix="$INSTALL" --buildtype=release -Drelease_version="$APP_VERSION" -Dprofile="$PROFILE"
 meson install -C build
 
 # -- 2. .app skeleton ---------------------------------------------------------

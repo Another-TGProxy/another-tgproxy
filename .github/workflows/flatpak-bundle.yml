@@ -34,10 +34,12 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
           set -euo pipefail
-          CORE=https://github.com/Another-TGProxy/mtproxy-ws.git
-          CORE_COMMIT=$(git ls-remote "$CORE" refs/heads/main | cut -f1)
-          STATION=https://github.com/Ampernic/libstation.git
-          STATION_COMMIT=$(git ls-remote "$STATION" refs/heads/master | cut -f1)
+          # core + libstation commits come from the pinned wraps — the single
+          # source of truth shared with every other platform (the Flatpak
+          # manifest builds them as modules, so pkg-config finds them and the
+          # meson subproject fallback is never used, same as the ALT build).
+          CORE_COMMIT=$(sed -n 's/^revision = //p' subprojects/mtproxy-ws.wrap | head -1)
+          STATION_COMMIT=$(sed -n 's/^revision = //p' subprojects/libstation.wrap | head -1)
           VERSION="${RELEASE_VERSION#v}"
           [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
           # Inject the displayed version into the gui module, or drop the placeholder.
@@ -67,10 +69,4 @@ jobs:
           name: another-tgproxy-flatpak
           path: ${{ env.BUNDLE }}
           retention-days: 14
-
-      - name: Release on tag
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ env.BUNDLE }}
-          prerelease: ${{ contains(github.ref_name, '-') }}
+        # On a tag, release.yml collects this artifact and publishes the release.

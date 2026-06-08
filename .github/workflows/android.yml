@@ -152,6 +152,10 @@ jobs:
           if [ -n "$VERSION" ]; then
             sed -i "s|value: '',|value: '$VERSION',|" meson_options.txt
             grep -n "release_version" -A2 meson_options.txt
+          else
+            # Untagged branch build: development profile (.Devel icon/name +
+            # striped header, separate config dir), set as the meson option default.
+            sed -i "s|value: 'default',|value: 'development',|" meson_options.txt
           fi
           # Run from the repo root: meson.build is here, so the manifest's src://
           # paths resolve against it.
@@ -257,10 +261,4 @@ jobs:
           name: another-tgproxy-android
           path: android-apks/*.apk
           if-no-files-found: warn
-
-      - name: Release on tag
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: android-apks/*.apk
-          prerelease: ${{ contains(github.ref_name, '-') }}
+        # On a tag, release.yml collects this artifact and publishes the release.

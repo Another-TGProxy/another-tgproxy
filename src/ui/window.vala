@@ -23,6 +23,10 @@ namespace TgWsProxy {
 
         construct {
             this.title = Build.APP_NAME;
+            // Development builds get libadwaita's striped "devel" header (and the
+            // .Devel icon/name from the build profile) so they're unmistakable.
+            if (Build.IS_DEVEL)
+                this.add_css_class ("devel");
             cfg = Config.load ();
             service = new ServiceController (cfg);
             client = new DaemonClient ();

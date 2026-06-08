@@ -27,28 +27,14 @@ jobs:
       - name: Resolve channel + commits, render manifest
         run: |
           set -euo pipefail
-          CORE=https://github.com/Another-TGProxy/mtproxy-ws.git
-          STATION=https://github.com/Ampernic/libstation.git
-          # libstation is a support library tracked on master (no releases yet).
-          STATION_COMMIT=$(git ls-remote "$STATION" refs/heads/master | cut -f1)
-
-          if [ "${{ github.ref_type }}" = tag ]; then
-            CHANNEL=stable
-            GUI_COMMIT='${{ github.sha }}'
-            # Match core to its newest tag if it has any, else its main.
-            ctag=$(git ls-remote --tags --refs "$CORE" \
-                   | sed 's#.*refs/tags/##' | sort -V | tail -n1)
-            if [ -n "$ctag" ]; then
-              CORE_COMMIT=$(git ls-remote "$CORE" "refs/tags/$ctag" | cut -f1)
-            else
-              echo "::warning::mtproxy-ws has no tags; stable uses its main"
-              CORE_COMMIT=$(git ls-remote "$CORE" refs/heads/main | cut -f1)
-            fi
-          else
-            CHANNEL=devel
-            GUI_COMMIT='${{ github.sha }}'
-            CORE_COMMIT=$(git ls-remote "$CORE" refs/heads/main | cut -f1)
-          fi
+          # core + libstation commits come from the pinned wraps — the single
+          # source of truth shared with every platform. The channel (stable on a
+          # tag, devel on a branch) only decides where it is published, not which
+          # core/libstation goes in.
+          CORE_COMMIT=$(sed -n 's/^revision = //p' subprojects/mtproxy-ws.wrap | head -1)
+          STATION_COMMIT=$(sed -n 's/^revision = //p' subprojects/libstation.wrap | head -1)
+          GUI_COMMIT='${{ github.sha }}'
+          if [ "${{ github.ref_type }}" = tag ]; then CHANNEL=stable; else CHANNEL=devel; fi
 
           sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
               -e "s/__GUI_COMMIT__/$GUI_COMMIT/g" \

@@ -39,17 +39,10 @@ jobs:
       - name: Checkout GUI
         uses: actions/checkout@v6
 
-      - name: Checkout core (mtproxy-ws)
-        uses: actions/checkout@v6
-        with:
-          repository: Another-TGProxy/mtproxy-ws
-          path: _core
-
-      - name: Build + install core
-        run: |
-          meson setup _core/build _core --prefix=/usr --buildtype=release
-          meson install -C _core/build
-
+      # The core (mtproxy-ws) and libstation are vendored meson subprojects
+      # pinned in subprojects/*.wrap; meson fetches and builds them in-tree
+      # during the GUI build (no system package on the runner), so there is no
+      # separate core checkout — the wrap is the single source of truth.
       - name: Build + stage GUI into AppDir
         env:
           RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
@@ -57,7 +50,12 @@ jobs:
           VERSION="${RELEASE_VERSION#v}"
           [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          meson setup build --prefix=/usr --buildtype=release -Drelease_version="$VERSION"
+          # Tag = release; untagged branch build = "development" (.Devel app-id/icon
+          # + striped header), so it can't be mistaken for a release.
+          PROFILE=development; APP_ID=space.ampernic.AnotherTGProxy
+          [ -n "$RELEASE_VERSION" ] && PROFILE=default || APP_ID="$APP_ID.Devel"
+          echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
+          meson setup build --prefix=/usr --buildtype=release -Drelease_version="$VERSION" -Dprofile="$PROFILE"
           DESTDIR="$PWD/AppDir" meson install -C build
 
       - name: Bundle libraries with sharun (incl. glibc + loader)
@@ -79,9 +77,9 @@ jobs:
           # AppImage AppDir entrypoint: AppRun -> sharun; .app names the bin to launch.
           ln -f AppDir/sharun AppDir/AppRun
           echo 'another-tgproxy' > AppDir/.app
-          cp AppDir/usr/share/applications/space.ampernic.AnotherTGProxy.desktop AppDir/
-          cp AppDir/usr/share/icons/hicolor/scalable/apps/space.ampernic.AnotherTGProxy.svg AppDir/
-          cp AppDir/space.ampernic.AnotherTGProxy.svg AppDir/.DirIcon
+          cp "AppDir/usr/share/applications/$APP_ID.desktop" AppDir/
+          cp "AppDir/usr/share/icons/hicolor/scalable/apps/$APP_ID.svg" AppDir/
+          cp "AppDir/$APP_ID.svg" AppDir/.DirIcon
 
       - name: Pack AppImage (uruntime + DwarFS)
         run: |
@@ -99,10 +97,4 @@ jobs:
           name: another-tgproxy-linux-x86_64
           path: ${{ env.OUT }}
           if-no-files-found: error
-
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ env.OUT }}
-          prerelease: ${{ contains(github.ref_name, '-') }}
+        # On a tag, release.yml collects this artifact and publishes the release.

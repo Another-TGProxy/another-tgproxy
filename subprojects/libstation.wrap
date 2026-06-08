@@ -1,11 +1,15 @@
 # Cross-platform desktop integration (tray, control IPC, shell helpers) shared
 # with other Ampernic GTK apps. Built from source as a subproject on every
-# platform so each bundle ships it; the dependency carries its Vala binding, so
-# the app just depends on libstation-1 and valac picks up libstation-1.vapi.
+# bundled platform — no distro outside ALT ships libstation. The dependency
+# carries its Vala binding, so the app just depends on libstation-1 and valac
+# picks up libstation-1.vapi. On ALT, pkg-config finds the system libstation1 /
+# libstation-devel first and this fallback is never used.
+#
+# revision is pinned to an exact commit so a GUI tag builds one deterministic
+# libstation on every platform. Bump it deliberately via tools/pin-deps.sh.
 [wrap-git]
 url = https://github.com/Ampernic/libstation.git
-revision = master
-depth = 1
+revision = 7d5c79c4dc584e91072456dd74992158fab03dbb
 
 [provide]
 libstation-1 = station_dep

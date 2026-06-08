@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Build another-tgproxy + the mtproxy-ws core under MSYS2/MinGW (ucrt64) and
-# assemble a portable folder with the full GTK4 runtime, then zip it.
-#   env: CORE_SRC = path to the mtproxy-ws checkout (default: _core)
+# Build another-tgproxy under MSYS2/MinGW (ucrt64) and assemble a portable folder
+# with the full GTK4 runtime, then zip it. The mtproxy-ws core and libstation are
+# vendored meson subprojects (subprojects/*.wrap, pinned) built in-tree by the
+# GUI's meson setup — no separate core build.
 # Run from the gui/ directory inside an MSYS2 ucrt64 shell.
 set -euo pipefail
 
 PREFIX="${MINGW_PREFIX:-/ucrt64}"
-CORE_SRC="${CORE_SRC:-_core}"
 STAGE="$PWD/_stage"          # meson install prefix (POSIX-style layout)
 DIST="$PWD/dist/another-tgproxy"
 BIN="another-tgproxy.exe"
@@ -24,19 +24,18 @@ copy_dll_deps () {
   done
 }
 
-# -- 1. Build core + gui into the staging prefix ------------------------------
-info "Building core (mtproxy-ws)..."
-rm -rf "$STAGE" "$PWD/dist"
-meson setup "$CORE_SRC/_b" "$CORE_SRC" --prefix="$STAGE" --buildtype=release -Dservice=false
-meson install -C "$CORE_SRC/_b"
-
+# -- 1. Build gui (+ vendored core/libstation subprojects) into staging -------
 info "Building gui (another-tgproxy)..."
+rm -rf "$STAGE" "$PWD/dist"
 # Displayed/file version: the release tag (RELEASE_VERSION, set by CI on a tag,
 # leading "v" stripped) else the meson.build project version.
 VERSION="${RELEASE_VERSION#v}"
 [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+# A tag is a release (default profile); an untagged branch build is "development"
+# — the .Devel app-id/icon and the striped header so it never looks like a release.
+PROFILE=development; [ -n "${RELEASE_VERSION:-}" ] && PROFILE=default
 export PKG_CONFIG_PATH="$STAGE/lib/pkgconfig:$STAGE/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
-meson setup build --prefix="$STAGE" --buildtype=release -Drelease_version="$VERSION"
+meson setup build --prefix="$STAGE" --buildtype=release -Drelease_version="$VERSION" -Dprofile="$PROFILE"
 meson install -C build
 
 # -- 2. Portable tree: bin/ (exe + DLLs), lib/, share/ ------------------------
