@@ -1,0 +1,107 @@
+name: macOS
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths: &paths
+      - 'src/**'
+      - 'data/**'
+      - 'po/**'
+      - 'meson.build'
+      - 'subprojects/**'
+      - 'packaging/macos/**'
+      - '.github/workflows/macos.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # Both Mac architectures from one Apple-Silicon runner: arm64 builds natively;
+  # x86_64 builds under Rosetta against a parallel Intel Homebrew in /usr/local
+  # (the Intel runners are gone and the deps are single-arch, so no universal lipo).
+  build:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+      - name: Checkout GUI
+        uses: actions/checkout@v6
+
+      - name: Checkout core (mtproxy-ws)
+        uses: actions/checkout@v6
+        with:
+          repository: Another-TGProxy/mtproxy-ws
+          path: _core
+
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v5
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-macos-${{ matrix.arch }}-${{ hashFiles('.github/workflows/macos.yml') }}
+
+      # ---- arm64: native Homebrew (/opt/homebrew) ----
+      - name: Install dependencies (arm64)
+        if: matrix.arch == 'arm64'
+        run: |
+          brew update --quiet || true
+          brew install \
+            meson ninja pkg-config \
+            vala blueprint-compiler \
+            gtk4 libadwaita json-glib glib-networking \
+            openssl@3 gettext \
+            adwaita-icon-theme librsvg \
+            dylibbundler create-dmg desktop-file-utils
+
+      - name: Build app + bundle .app/.dmg (arm64)
+        if: matrix.arch == 'arm64'
+        env:
+          CORE_SRC: _core
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: bash packaging/macos/bundle-macos.sh
+
+      # ---- x86_64: Rosetta + Intel Homebrew (/usr/local), whole build emulated ----
+      - name: Install Rosetta + Intel Homebrew (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ENV_HINTS=1
+          sudo softwareupdate --install-rosetta --agree-to-license
+          arch -x86_64 /bin/bash -c 'export NONINTERACTIVE=1; /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+          arch -x86_64 /usr/local/bin/brew update --quiet || true
+          # `|| true`: a non-fatal link conflict on an unrelated dep (the runner
+          # already has python in /usr/local) must not abort; the libs we link
+          # against still pour, and the build step surfaces any real miss.
+          arch -x86_64 /usr/local/bin/brew install \
+            meson ninja pkg-config \
+            vala blueprint-compiler \
+            gtk4 libadwaita json-glib glib-networking \
+            openssl@3 gettext \
+            adwaita-icon-theme librsvg \
+            dylibbundler create-dmg desktop-file-utils || true
+
+      - name: Build app + bundle .app/.dmg (x86_64 under Rosetta)
+        if: matrix.arch == 'x86_64'
+        env:
+          CORE_SRC: _core
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          arch -x86_64 /bin/bash -c 'export PATH=/usr/local/bin:$PATH RELEASE_VERSION='"'$RELEASE_VERSION'"'; CORE_SRC=_core bash packaging/macos/bundle-macos.sh'
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: another-tgproxy-macos-${{ matrix.arch }}
+          path: dist/*.dmg
+          retention-days: 14
+
+      - name: Release on tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          prerelease: ${{ contains(github.ref_name, '-') }}

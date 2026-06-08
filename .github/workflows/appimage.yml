@@ -4,8 +4,16 @@ on:
   push:
     branches: ['**']
     tags: ['v*']
+    paths: &paths
+      - 'src/**'
+      - 'data/**'
+      - 'po/**'
+      - 'meson.build'
+      - 'subprojects/**'
+      - '.github/workflows/appimage.yml'
   pull_request:
-    branches: ['**']
+    paths: *paths
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -29,10 +37,10 @@ jobs:
             gsettings-desktop-schemas libgtk-4-bin
 
       - name: Checkout GUI
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout core (mtproxy-ws)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: Another-TGProxy/mtproxy-ws
           path: _core
@@ -43,8 +51,13 @@ jobs:
           meson install -C _core/build
 
       - name: Build + stage GUI into AppDir
+        env:
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
-          meson setup build --prefix=/usr --buildtype=release
+          VERSION="${RELEASE_VERSION#v}"
+          [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          meson setup build --prefix=/usr --buildtype=release -Drelease_version="$VERSION"
           DESTDIR="$PWD/AppDir" meson install -C build
 
       - name: Bundle libraries with sharun (incl. glibc + loader)
@@ -54,6 +67,9 @@ jobs:
           chmod +x sharun
           # lib4bin pulls the binary + every shared lib it needs — including glibc and
           # the dynamic loader — into AppDir/shared, so the AppImage runs on older glibc.
+          # libstation is a vendored subproject installed only inside AppDir (not on
+          # the host), so expose AppDir's libdir to ldd or lib4bin can't resolve it.
+          export LD_LIBRARY_PATH="$PWD/AppDir/usr/lib/$ARCH-linux-gnu:$PWD/AppDir/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           ./sharun lib4bin --hard-links --with-hooks --strip --gen-lib-path --dst-dir AppDir \
             AppDir/usr/bin/another-tgproxy \
             /usr/lib/$ARCH-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders/*.so \
@@ -69,22 +85,24 @@ jobs:
 
       - name: Pack AppImage (uruntime + DwarFS)
         run: |
+          OUT="AnotherTGProxy-$VERSION-linux-x86_64.AppImage"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
           wget -qO uruntime https://github.com/VHSgunzo/uruntime/releases/latest/download/uruntime-appimage-dwarfs-x86_64
           chmod +x uruntime
-          ./uruntime --appimage-mkdwarfs -f -i AppDir -o another-tgproxy-x86_64.AppImage --header ./uruntime
-          chmod +x another-tgproxy-x86_64.AppImage
-          ls -la another-tgproxy-x86_64.AppImage
+          ./uruntime --appimage-mkdwarfs -f -i AppDir -o "$OUT" --header ./uruntime
+          chmod +x "$OUT"
+          ls -la "$OUT"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: another-tgproxy-x86_64.AppImage
-          path: another-tgproxy-x86_64.AppImage
+          name: another-tgproxy-linux-x86_64
+          path: ${{ env.OUT }}
           if-no-files-found: error
 
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: another-tgproxy-x86_64.AppImage
-          generate_release_notes: true
+          files: ${{ env.OUT }}
+          prerelease: ${{ contains(github.ref_name, '-') }}

@@ -38,7 +38,16 @@ modules:
     buildsystem: meson
     config-opts:
       - --buildtype=release
+      - --libdir=lib   # vendored libstation .so lands in /app/lib (on ld's path)
+      - __GUI_VERSION_OPT__   # CI replaces with -Drelease_version=<tag>, or drops it
     sources:
       - type: git
         url: https://github.com/Another-TGProxy/another-tgproxy.git
         commit: __GUI_COMMIT__
+      # libstation is consumed as a meson subproject (the libstation.wrap in
+      # subprojects/). The Flatpak build has no network, so place its checkout at
+      # subprojects/libstation: meson then reuses it instead of cloning the wrap.
+      - type: git
+        url: https://github.com/Ampernic/libstation.git
+        commit: __STATION_COMMIT__
+        dest: subprojects/libstation

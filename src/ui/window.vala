@@ -7,6 +7,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.ToastOverlay toast_overlay;
         [GtkChild] private unowned Adw.Banner conn_banner;
         [GtkChild] private unowned Adw.Banner err_banner;
+        [GtkChild] private unowned Adw.Banner update_banner;
         [GtkChild] private unowned HomeView home_view;
         [GtkChild] private unowned SettingsView settings_view;
         [GtkChild] private unowned LogView log_view;
@@ -45,6 +46,209 @@ namespace TgWsProxy {
             client.status_changed.connect (on_status);
             service.failed.connect (present_error);
             client.start ();
+
+            // Route this (GUI) process's GLib output to proxy.log so the update
+            // check below is visible in the in-app log. No-op on Android, where the
+            // in-process EngineHost already set the logger up.
+            Logging.attach (cfg);
+
+            // Notify about a newer GitHub release where no repo manages updates
+            // (Windows/macOS/Android/AppImage). Native/Flatpak Linux uses its repo.
+            if (cfg.check_updates && Platform.get_default ().updates_relevant ()) {
+                updater = new Station.Updates ("Another-TGProxy/another-tgproxy", Build.VERSION);
+                // Channels this build offers; the prerelease keywords each accepts.
+                updater.add_channel ("stable", null);
+                updater.add_channel ("beta", { "beta", "rc", "alpha" });
+                // Empty config = track beta on a prerelease build, stable otherwise.
+                var ch = cfg.update_channel;
+                if (ch == "") ch = Build.VERSION.contains ("-") ? "beta" : "stable";
+                updater.set_channel (ch);
+                updater.available.connect (on_update_available);
+                updater.download_progress.connect (on_dl_progress);
+                updater.downloaded.connect (on_downloaded);
+                updater.download_failed.connect (on_dl_failed);
+                update_banner.button_clicked.connect (() => show_update_dialog ());
+                updater.check ();
+            }
+        }
+
+        private Station.Updates? updater = null;
+        private string update_url = "";
+        private string update_version = "";
+        private string update_notes = "";
+        private Adw.Dialog? update_dialog = null;
+        private Gtk.ProgressBar? dl_bar = null;
+        private Gtk.Button? dl_btn = null;
+        private bool downloading = false;
+
+        private void on_update_available (string version, string url, string notes) {
+            update_url = url;
+            update_version = version;
+            update_notes = notes;
+            update_banner.title = _("Update available: %s").printf (version);
+            update_banner.revealed = true;
+            show_update_dialog ();
+        }
+
+        // A dialog with the release notes, a progress bar and Later/Download.
+        // Reachable again via the banner button after it's dismissed.
+        private void show_update_dialog () {
+            if (update_url == "")
+                return;
+            var dlg = new Adw.Dialog () {
+                title = _("Update available: %s").printf (update_version),
+                content_width = 480, content_height = 400
+            };
+            var tv = new Adw.ToolbarView ();
+            tv.add_top_bar (new Adw.HeaderBar ());
+
+            var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 12) {
+                margin_top = 12, margin_bottom = 12, margin_start = 12, margin_end = 12
+            };
+            if (update_notes != "") {
+                var label = new Gtk.Label (update_notes) {
+                    wrap = true, xalign = 0, yalign = 0, selectable = true
+                };
+                box.append (new Gtk.ScrolledWindow () {
+                    hscrollbar_policy = Gtk.PolicyType.NEVER, vexpand = true, child = label
+                });
+            }
+            dl_bar = new Gtk.ProgressBar () { show_text = true, visible = false };
+            box.append (dl_bar);
+
+            var actions = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8) { halign = Gtk.Align.END };
+            var later = new Gtk.Button.with_label (_("Later"));
+            later.clicked.connect (() => dlg.close ());
+            dl_btn = new Gtk.Button.with_label (_("Download"));
+            dl_btn.add_css_class ("suggested-action");
+            dl_btn.clicked.connect (() => start_download ());
+            actions.append (later);
+            actions.append (dl_btn);
+            box.append (actions);
+
+            tv.content = box;
+            dlg.child = tv;
+            update_dialog = dlg;
+            dlg.present (this);
+        }
+
+        // The release asset for this platform (deterministic from the tag and our
+        // naming scheme) and where to stage it.
+        private string asset_filename () {
+#if WINDOWS
+            return "AnotherTGProxy-%s-windows-x86_64-setup.exe".printf (update_version);
+#elif ANDROID
+            return "AnotherTGProxy-%s-android-universal.apk".printf (update_version);
+#elif DARWIN
+            var u = Posix.utsname ();   // the constructor calls uname()
+            var arch = (u.machine == "x86_64") ? "x86_64" : "arm64";
+            return "AnotherTGProxy-%s-macos-%s.dmg".printf (update_version, arch);
+#else
+            return "AnotherTGProxy-%s-linux-x86_64.AppImage".printf (update_version);
+#endif
+        }
+
+        private string asset_url () {
+            return "https://github.com/Another-TGProxy/another-tgproxy/releases/download/v%s/%s"
+                .printf (update_version, asset_filename ());
+        }
+
+        private string asset_dest () {
+#if ANDROID
+            // gdk-android points XDG_DATA_HOME at the app's external files dir
+            // (writable, and readable by our own installApk); the cache dir
+            // resolves to a bogus $HOME/.cache here.
+            var dir = Environment.get_user_data_dir ();
+#else
+            var dir = Environment.get_tmp_dir ();
+#endif
+            return Path.build_filename (dir, asset_filename ());
+        }
+
+        private void start_download () {
+            if (updater == null || downloading)
+                return;
+            var dest = asset_dest ();
+            // The staging dir (e.g. the app's XDG_DATA_HOME on Android) may not
+            // exist yet; g_file_replace won't create it.
+            DirUtils.create_with_parents (Path.get_dirname (dest), 0755);
+            downloading = true;
+            if (dl_btn != null) { dl_btn.sensitive = false; dl_btn.label = _("Downloading…"); }
+            if (dl_bar != null) { dl_bar.visible = true; dl_bar.fraction = 0; dl_bar.text = ""; }
+            updater.download (asset_url (), dest);
+        }
+
+        private void on_dl_progress (double frac) {
+            if (dl_bar == null)
+                return;
+            if (frac < 0) {
+                dl_bar.pulse ();
+            } else {
+                dl_bar.fraction = frac;
+                dl_bar.text = "%d %%".printf ((int) (frac * 100));
+            }
+        }
+
+        private void on_downloaded (string path) {
+            downloading = false;
+            if (update_dialog != null) update_dialog.close ();
+            apply_update (path);
+        }
+
+        private void on_dl_failed (string reason) {
+            downloading = false;
+            if (dl_btn != null) { dl_btn.sensitive = true; dl_btn.label = _("Download"); }
+            if (dl_bar != null) dl_bar.visible = false;
+            toast (_("Download failed: %s").printf (reason));
+        }
+
+        // Hand the downloaded asset to the platform: run the installer (Windows),
+        // the system package installer (Android), open the disk image (macOS) or
+        // swap the AppImage in place and relaunch.
+        private void apply_update (string path) {
+#if WINDOWS
+            try {
+                Process.spawn_async (null, { path }, null,
+                    SpawnFlags.DO_NOT_REAP_CHILD, null, null);
+            } catch (Error e) {
+                toast (_("Could not start installer: %s").printf (e.message));
+                return;
+            }
+            application.quit ();
+#elif ANDROID
+            var s = get_surface ();
+            if (s != null)
+                Station.android_install_apk (s,
+                    "space.ampernic.anothertgproxy.ProxyApplication", path);
+#elif DARWIN
+            try { Station.open_uri ("file://" + path); }
+            catch (Error e) { toast (_("Could not open the disk image: %s").printf (e.message)); }
+#else
+            // AppImage: replace the running image and relaunch the new one.
+            var cur = Environment.get_variable ("APPIMAGE");
+            if (cur == null || cur == "") {
+                try { Station.open_uri ("file://" + path); } catch (Error e) {}
+                return;
+            }
+            if (FileUtils.rename (path, cur) != 0) {
+                toast (_("Could not replace the AppImage"));
+                return;
+            }
+            FileUtils.chmod (cur, 0755);
+            try {
+                Process.spawn_async (null, { cur }, null,
+                    SpawnFlags.DO_NOT_REAP_CHILD, null, null);
+            } catch (Error e) { toast (e.message); return; }
+            application.quit ();
+#endif
+        }
+
+        // On macOS/Windows the app lives on in the tray after the window is
+        // destroyed; stop this window's control client so its reconnect loop and
+        // socket don't linger until finalization.
+        public override void dispose () {
+            if (client != null) client.stop ();
+            base.dispose ();
         }
 
         private void toast (string msg) {
@@ -102,9 +306,11 @@ namespace TgWsProxy {
                 application_icon = Build.APP_ID_RELEVANT,
                 developer_name = "Ampernic",
                 version = Build.VERSION,
+                comments = _("An MTProto ↔ WebSocket proxy for Telegram."),
                 license_type = Gtk.License.GPL_3_0,
                 website = Build.HOMEPAGE,
-                issue_url = Build.BUGTRACKER
+                issue_url = Build.BUGTRACKER,
+                translator_credits = _("translator-credits")
             };
             about.present (this);
         }

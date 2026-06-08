@@ -9,18 +9,28 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    paths:
+      - 'src/**'
+      - 'data/**'
+      - 'po/**'
+      - 'meson.build'
+      - 'packaging/flatpak/**'
+      - '.github/workflows/publish-flatpak.yml'
   workflow_dispatch:
 
 jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Resolve channel + commits, render manifest
         run: |
           set -euo pipefail
           CORE=https://github.com/Another-TGProxy/mtproxy-ws.git
+          STATION=https://github.com/Ampernic/libstation.git
+          # libstation is a support library tracked on master (no releases yet).
+          STATION_COMMIT=$(git ls-remote "$STATION" refs/heads/master | cut -f1)
 
           if [ "${{ github.ref_type }}" = tag ]; then
             CHANNEL=stable
@@ -42,16 +52,22 @@ jobs:
 
           sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
               -e "s/__GUI_COMMIT__/$GUI_COMMIT/g" \
-              flatpak/space.ampernic.AnotherTGProxy.yml > manifest.yml
+              -e "s/__STATION_COMMIT__/$STATION_COMMIT/g" \
+              -e "/__GUI_VERSION_OPT__/d" \
+              packaging/flatpak/space.ampernic.AnotherTGProxy.yml > manifest.yml
 
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
-          echo "channel=$CHANNEL  gui=${GUI_COMMIT:0:12}  core=${CORE_COMMIT:0:12}"
+          echo "channel=$CHANNEL  gui=${GUI_COMMIT:0:12}  core=${CORE_COMMIT:0:12}  station=${STATION_COMMIT:0:12}"
 
       - name: Dispatch to Ampernic/flatpak
         env:
           TOKEN: ${{ secrets.FLATPAK_DISPATCH_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::warning::FLATPAK_DISPATCH_TOKEN not set — skipping publish"
+            exit 0
+          fi
           payload=$(jq -n \
             --arg id  'space.ampernic.AnotherTGProxy' \
             --arg ch  "$CHANNEL" \

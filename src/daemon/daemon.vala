@@ -5,16 +5,14 @@ namespace TgWsProxy {
     // a Unix-socket control server for the GUI. Under Flatpak it also publishes a
     // live status to the XDG Background portal (see portal_set_status).
     public class Daemon : GLib.Application {
-        Config cfg;
-        Engine? engine = null;
-        SocketService? control = null;
-        FileStream? logfp = null;
-        string last_error = "";
-        TrayStatus? tray = null;
+        EngineRunner runner = new EngineRunner ();
+        Station.ControlServer? control = null;
+        TrayController? tray = null;
         Control? control_dbus = null;
         StatusMode current_mode = StatusMode.WINDOW;
-        GenericArray<Engine> retired = new GenericArray<Engine> ();
-        GenericArray<OutputStream> clients = new GenericArray<OutputStream> ();
+        bool quitting = false;
+        uint status_timer = 0;
+        string last_portal_msg = "";
 
         public Daemon () {
             Object (
@@ -23,62 +21,8 @@ namespace TgWsProxy {
             );
         }
 
-        // ---- engine lifecycle ----
-
-        void setup_logging () {
-            if (!cfg.log_to_file) return;
-            Paths.ensure_dir ();
-            logfp = FileStream.open (Paths.log_file (), "a");
-            Log.set_default_handler ((domain, level, msg) => {
-                var ts = new DateTime.now_local ().format ("%H:%M:%S");
-                var line = "%s  %s\n".printf (ts, msg);
-                stderr.printf ("%s", line);
-                if (logfp != null) { logfp.puts (line); logfp.flush (); }
-            });
-        }
-
-        bool start_engine () {
-            cfg = Config.load ();
-            engine = new Engine (cfg.host, (uint16) cfg.port, cfg.secret_bytes ());
-            cfg.configure_engine (engine);
-            if (!engine.start ()) {
-                engine = null;
-                last_error = _("Failed to bind %s:%d — port already in use").printf (
-                    cfg.host, cfg.port);
-                warning ("%s", last_error);
-                return false;
-            }
-            last_error = "";
-            message ("proxy started: tg://proxy?server=%s&port=%d&secret=dd%s",
-                     cfg.host, cfg.port, cfg.secret);
-            return true;
-        }
-
-        void stop_engine () {
-            if (engine != null) {
-                engine.stop ();
-                // Keep alive instead of freeing: detached client threads may
-                // still reference it; freeing here would be a use-after-free.
-                retired.add ((owned) engine);
-                engine = null;
-            }
-        }
-
-        Status snapshot () {
-            var s = new Status ();
-            s.host = cfg.host;
-            s.port = cfg.port;
-            s.secret = cfg.secret;
-            s.running = engine != null;
-            s.error = last_error;
-            if (engine != null) {
-                s.conn_total = engine.connections_total ();
-                s.conn_active = engine.connections_active ();
-                s.bytes_up = engine.bytes_up ();
-                s.bytes_down = engine.bytes_down ();
-            }
-            return s;
-        }
+        // The engine lifecycle (start/stop/reload/snapshot) lives in the shared
+        // EngineRunner; the daemon adds the control server, tray and D-Bus surface.
 
         // ---- GNOME background status (xdg Background portal) ----
 
@@ -90,25 +34,22 @@ namespace TgWsProxy {
 
         // Fill the user's status_template with live values.
         string status_message () {
-            if (engine == null)
+            if (!runner.running)
                 return _("Proxy stopped");
-            var s = cfg.status_template;
-            s = s.replace ("{active}", engine.connections_active ().to_string ());
-            s = s.replace ("{total}", engine.connections_total ().to_string ());
-            s = s.replace ("{up}", human_bytes (engine.bytes_up ()));
-            s = s.replace ("{down}", human_bytes (engine.bytes_down ()));
-            s = s.replace ("{host}", cfg.host);
-            s = s.replace ("{port}", cfg.port.to_string ());
-            return s;
+            return runner.snapshot ().format (runner.cfg.status_template);
         }
 
         // Create/destroy presenters so that exactly one (the chosen mode's) is
         // alive — selecting any mode tears the others down.
         void reconcile_status_mode () {
-            current_mode = Platform.get_default ().mode_of (cfg.status_mode);
+            current_mode = Platform.get_default ().mode_of (runner.cfg.status_mode);
+#if !DARWIN && !WINDOWS
+            // The SNI tray is the daemon's only on Linux; on macOS/Windows the
+            // native tray (NSStatusItem / Shell_NotifyIcon) lives in the GUI.
             bool want_tray = current_mode == StatusMode.TRAY;
             if (want_tray && tray == null) setup_tray ();
             else if (!want_tray && tray != null) { tray.close (); tray = null; }
+#endif
         }
 
         // StatusMode.NOTIFICATION is reserved for an Android foreground-service
@@ -116,14 +57,16 @@ namespace TgWsProxy {
         // desktop: GNOME has no persistent notification, so it would only spam
         // banners. The Android port wires its presenter here.
 
+#if !DARWIN && !WINDOWS
         void setup_tray () {
-            tray = new TrayStatus ();
+            tray = new TrayController ();
             tray.open_requested.connect (open_gui);
             tray.open_telegram_requested.connect (open_telegram);
             tray.toggle_requested.connect (toggle_engine);
             tray.restart_requested.connect (restart_engine);
             tray.quit_requested.connect (() => { do_quit (); });
         }
+#endif
 
         // D-Bus control surface for the GNOME Shell quick-settings extension.
         void setup_control () {
@@ -144,20 +87,23 @@ namespace TgWsProxy {
         }
 
         void toggle_engine () {
-            if (engine != null) stop_engine ();
-            else start_engine ();
+            if (runner.running) runner.stop ();
+            else runner.start ();
             push_status_all ();
             publish_status ();
         }
 
         void restart_engine () {
-            stop_engine ();
-            start_engine ();
+            runner.reload ();
             push_status_all ();
             publish_status ();
         }
 
         void open_gui () {
+#if DARWIN || WINDOWS
+            // No .desktop here; the tray that raises the window lives in the GUI
+            // process (NSStatusItem / Shell_NotifyIcon), not in this daemon.
+#else
             var info = new DesktopAppInfo (Build.APP_ID_RELEVANT + ".desktop");
             if (info == null) return;
             try {
@@ -165,14 +111,16 @@ namespace TgWsProxy {
             } catch (Error e) {
                 warning ("open gui failed: %s", e.message);
             }
+#endif
         }
 
         void open_telegram () {
+            var cfg = runner.cfg;
             if (cfg.secret.length != 32) return;
             var uri = "tg://proxy?server=%s&port=%d&secret=dd%s".printf (
                 cfg.host, cfg.port, cfg.secret);
             try {
-                AppInfo.launch_default_for_uri (uri, null);
+                Station.open_uri (uri);
             } catch (Error e) {
                 warning ("open telegram failed: %s", e.message);
             }
@@ -180,21 +128,26 @@ namespace TgWsProxy {
 
         // Push the live status to every active presenter.
         void publish_status () {
-            if (current_mode == StatusMode.BACKGROUND_PORTAL) portal_set_status ();
-            if (tray != null) tray.update (status_message (), engine != null);
+            if (current_mode == StatusMode.BACKGROUND_PORTAL) {
+                var msg = status_message ();
+                if (msg != last_portal_msg) {   // skip the D-Bus call when unchanged
+                    last_portal_msg = msg;
+                    portal_set_status (msg);
+                }
+            }
+            if (tray != null) tray.update (status_message (), runner.running);
             if (control_dbus != null) {
-                bool r = engine != null;
+                bool r = runner.running;
                 var st = status_message ();
                 if (r != control_dbus.running || st != control_dbus.status)
                     control_dbus.publish (r, st);
             }
         }
 
-        void portal_set_status () {
+        void portal_set_status (string msg) {
             if (!is_sandboxed ()) return;
             var conn = get_dbus_connection ();
             if (conn == null) return;
-            string msg = status_message ();
             var b = new VariantBuilder (new VariantType ("a{sv}"));
             b.add ("{sv}", "message", new Variant.string (msg));
             conn.call.begin (
@@ -206,65 +159,31 @@ namespace TgWsProxy {
                 null, DBusCallFlags.NONE, -1, null);
         }
 
-        // ---- control server (Unix socket) ----
+        // ---- control server (libstation: Unix socket / loopback TCP + token) ----
 
         void start_control () throws Error {
-            var sockpath = Paths.control_sock ();
-            if (FileUtils.test (sockpath, FileTest.EXISTS))
-                FileUtils.unlink (sockpath);   // stale socket from a prior crash
-            control = new SocketService ();
-            var addr = new UnixSocketAddress (sockpath);
-            control.add_address (addr, SocketType.STREAM, SocketProtocol.DEFAULT, null, null);
-            FileUtils.chmod (sockpath, 0600);
-            control.incoming.connect ((conn, src) => {
-                handle_control.begin ((SocketConnection) conn);
-                return false;
-            });
+            control = new Station.ControlServer (Build.DAEMON_ID);
+            control.command.connect (on_control_command);
             control.start ();
         }
 
-        void push_status_all () {
-            if (clients.length == 0) return;
-            var line = snapshot ().to_line ();
-            for (int i = clients.length - 1; i >= 0; i--) {
-                try {
-                    clients[i].write_all (line.data, null);
-                } catch (Error e) {
-                    clients.remove_index (i);
-                }
+        void on_control_command (string line) {
+            var cmd = command_of (line);
+            if (cmd == "status") {
+                push_status_all ();
+            } else if (cmd == "reload") {
+                runner.reload ();
+                reconcile_status_mode ();
+                publish_status ();
+                push_status_all ();
+            } else if (cmd == "stop") {
+                do_quit ();
             }
         }
 
-        async void handle_control (SocketConnection conn) {
-            var os = conn.output_stream;
-            clients.add (os);
-            try {
-                yield os.write_all_async (snapshot ().to_line ().data,
-                                          Priority.DEFAULT, null, null);
-                var dis = new DataInputStream (conn.input_stream);
-                string? line;
-                while ((line = yield dis.read_line_async (Priority.DEFAULT, null)) != null) {
-                    var cmd = command_of (line);
-                    if (cmd == "status") {
-                        yield os.write_all_async (snapshot ().to_line ().data,
-                                                  Priority.DEFAULT, null, null);
-                    } else if (cmd == "reload") {
-                        stop_engine ();
-                        start_engine ();
-                        reconcile_status_mode ();
-                        publish_status ();
-                        yield os.write_all_async (snapshot ().to_line ().data,
-                                                  Priority.DEFAULT, null, null);
-                    } else if (cmd == "stop") {
-                        do_quit ();
-                        break;
-                    }
-                }
-            } catch (Error e) {
-                // client gone
-            }
-            for (int i = 0; i < clients.length; i++)
-                if (clients[i] == os) { clients.remove_index (i); break; }
+        void push_status_all () {
+            if (control != null)
+                control.broadcast (runner.snapshot ().to_line ().chomp ());
         }
 
         // ---- GApplication lifecycle ----
@@ -273,10 +192,14 @@ namespace TgWsProxy {
             base.startup ();
             hold ();   // keep running with no windows
             Paths.ensure_dir ();
-            cfg = Config.load ();
-            setup_logging ();
+#if WINDOWS
+            // No D-Bus / signals on Windows; the GUI stops us by this PID.
+            try { FileUtils.set_contents (Paths.pid_file (), Station.get_pid ().to_string ()); }
+            catch (Error e) { warning ("pid write failed: %s", e.message); }
+#endif
+            Logging.setup (runner.cfg);
 
-            start_engine ();
+            runner.start ();
             try {
                 start_control ();
             } catch (Error e) {
@@ -290,14 +213,16 @@ namespace TgWsProxy {
             setup_control ();
             reconcile_status_mode ();
             publish_status ();
-            Timeout.add_seconds (2, () => {
+            status_timer = Timeout.add_seconds (2, () => {
                 push_status_all ();
                 publish_status ();
                 return Source.CONTINUE;
             });
 
+#if !WINDOWS
             Unix.signal_add (Posix.Signal.TERM, () => { do_quit (); return Source.REMOVE; });
             Unix.signal_add (Posix.Signal.INT, () => { do_quit (); return Source.REMOVE; });
+#endif
         }
 
         public override void activate () {
@@ -305,17 +230,32 @@ namespace TgWsProxy {
         }
 
         public override void shutdown () {
-            stop_engine ();
-            if (control != null) control.stop ();
-            FileUtils.unlink (Paths.control_sock ());
+            if (status_timer != 0) { Source.remove (status_timer); status_timer = 0; }
+            runner.stop ();
+            if (control != null) { control.stop (); control = null; }
+            cleanup_control ();
             base.shutdown ();
         }
 
+        // libstation owns the control endpoint files; only the Windows pid file
+        // (used by the GUI to stop us by PID) is ours to clear.
+        static void cleanup_control () {
+#if WINDOWS
+            FileUtils.unlink (Paths.pid_file ());
+#endif
+        }
+
         void do_quit () {
-            stop_engine ();
+            // Reachable from SIGTERM/SIGINT, the "stop" IPC command, the quit
+            // action and the tray — guard so a second trigger doesn't unbalance
+            // hold()/release() or quit() twice.
+            if (quitting) return;
+            quitting = true;
+            if (status_timer != 0) { Source.remove (status_timer); status_timer = 0; }
+            runner.stop ();
             if (tray != null) { tray.close (); tray = null; }
             if (control != null) { control.stop (); control = null; }
-            FileUtils.unlink (Paths.control_sock ());
+            cleanup_control ();
             release ();   // drop the hold so the app can exit
             quit ();
         }

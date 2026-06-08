@@ -4,3 +4,9 @@ option('profile',
   value: 'default',
   description: 'Build profile; "development" uses a separate app-id (.Devel), name and config dir so it never clashes with an installed stable build'
 )
+
+option('release_version',
+  type: 'string',
+  value: '',
+  description: 'Overrides the displayed version (e.g. a release tag like 2.0.0-beta1); empty uses the project version from meson.build'
+)

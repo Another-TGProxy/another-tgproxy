@@ -30,13 +30,20 @@ if get_option('profile') == 'development'
   localedir = meson.project_build_root() / 'po'
 endif
 
+# Displayed version: a release tag (e.g. 2.0.0-beta1) passed by CI via
+# -Drelease_version, else the project version from meson.build.
+app_version = meson.project_version()
+if get_option('release_version') != ''
+  app_version = get_option('release_version')
+endif
+
 conf = configuration_data()
 conf.set_quoted('APP_ID', app_id)
 conf.set_quoted('APP_ID_RELEVANT', app_id_relevant)
 conf.set_quoted('DAEMON_ID', app_id_relevant + '.Daemon')
 conf.set_quoted('APP_NAME', app_name)
 conf.set_quoted('APP_DIRNAME', app_dirname)
-conf.set_quoted('VERSION', meson.project_version())
+conf.set_quoted('VERSION', app_version)
 conf.set_quoted('OS', host_machine.system())
 conf.set_quoted('GETTEXT_PACKAGE', meson.project_name())
 conf.set_quoted('LOCALEDIR', localedir)
@@ -45,23 +52,85 @@ conf.set_quoted('BUGTRACKER', bugtracker)
 conf.set10('IS_DEVEL', is_devel)
 config_h = configure_file(output: 'build-config.h', configuration: conf)
 
-mtproxy_dep = dependency('mtproxy-ws')   # the core: libmtproxyws + headers
+# On Android GLib/GTK fall back to proxy-libintl built -DSTUB_ONLY, so gettext is
+# a no-op and nothing (GLib, GTK or this app) translates. We ship a real libintl
+# AS the "proxy-libintl" subproject and configure it first: claiming that name
+# makes GTK's anonymous `dependency('', fallback: ['proxy-libintl', ...])` reuse
+# ours instead of fetching the stub, while the override covers GLib's named
+# `dependency('intl')`. Both must happen before GLib is configured (below).
+if host_machine.system() == 'android'
+  intl_subproject = subproject('proxy-libintl')
+  meson.override_dependency('intl', intl_subproject.get_variable('intl_dep'))
+endif
+
+# Use the system core on desktop; on Android (no system lib) fall back to the
+# mtproxy-ws meson subproject (subprojects/mtproxy-ws.wrap).
+mtproxy_dep = dependency('mtproxy-ws',
+  fallback: ['mtproxy-ws', 'mtproxyws_dep'])
 deps = [
   dependency('glib-2.0'),
   dependency('gio-2.0'),
-  dependency('gio-unix-2.0'),
   dependency('gtk4'),
   dependency('libadwaita-1', version: '>= 1.7'),   # Adw.WrapBox, Adw.ToggleGroup
   dependency('json-glib-1.0'),
   mtproxy_dep,
 ]
+# Cross-platform integration (tray, control IPC, shell helpers, and on Android the
+# background-operation backend) from libstation, built from source as a subproject
+# so every bundle ships it. Its Vala binding is a committed vapi located via the
+# `vapidir` dep variable (added to vala_extra below). introspection=disabled: the
+# app only needs the vapi, so the subproject skips GIR (and the g-ir-scanner dep).
+station_dep = dependency('station-1',
+  fallback: ['libstation', 'station_dep'],
+  default_options: ['introspection=disabled'])
+deps += station_dep
+# gio-unix (Unix sockets, GDesktopAppInfo) is Linux/macOS-only; Windows uses TCP
+# + token IPC and has no .desktop, all behind #if WINDOWS.
+if host_machine.system() != 'windows'
+  deps += dependency('gio-unix-2.0')
+endif
 
 # The core ships its Vala binding (mtproxy-ws.vapi) in its own datadir; add it
 # to valac's search path so this builds against a non-system install too.
 vala_extra = ['--pkg', 'mtproxy-ws', '--pkg', 'posix']
-mtproxy_vapidir = mtproxy_dep.get_variable(pkgconfig: 'vapidir', default_value: '')
+if host_machine.system() == 'darwin'
+  # GDesktopAppInfo / SNI / session D-Bus are Linux-only; macOS code paths are
+  # guarded with #if DARWIN in the Vala sources.
+  vala_extra += ['--define=DARWIN']
+elif host_machine.system() == 'windows'
+  # No Unix sockets / D-Bus / glib-unix signals on Windows: control IPC is TCP
+  # + token, the service is a detached process, all behind #if WINDOWS.
+  vala_extra += ['--define=WINDOWS']
+elif host_machine.system() == 'android'
+  # Android is single-process (no daemon/D-Bus/tray); #if ANDROID code paths.
+  vala_extra += ['--define=ANDROID']
+  # The target gtk4/libadwaita/json-glib come from vapi-less Pixiewood/wrap
+  # subprojects, so meson can't auto-add their --pkg for valac. Name them
+  # explicitly; valac binds against the host vapis (generated C is cross-built
+  # against the real Android headers/libs).
+  vala_extra += [
+    '--pkg', 'gtk4',
+    '--pkg', 'libadwaita-1',
+    '--pkg', 'json-glib-1.0',
+    '--pkg', 'gio-2.0',
+    '--pkg', 'gio-unix-2.0',
+  ]
+endif
+mtproxy_vapidir = mtproxy_dep.get_variable('vapidir', default_value: '')
 if mtproxy_vapidir != ''
   vala_extra += ['--vapidir', mtproxy_vapidir]
+endif
+
+# libstation's committed vapi (libstation-1.vapi; + the Gdk-typed Android extras
+# on Android). Located via the dep's vapidir variable (source dir as a subproject,
+# datadir when found via pkg-config).
+station_vapidir = station_dep.get_variable('vapidir', default_value: '')
+if station_vapidir != ''
+  vala_extra += ['--vapidir', station_vapidir]
+endif
+vala_extra += ['--pkg', 'libstation-1']
+if host_machine.system() == 'android'
+  vala_extra += ['--pkg', 'libstation-android-1']
 endif
 
 blueprint_compiler = find_program('blueprint-compiler')
@@ -86,31 +155,74 @@ sources = files(
   'src/application.vala',
   'src/config.vala',
   'src/ipc.vala',
+  'src/logging.vala',
   'src/platform.vala',
+  'src/engine-runner.vala',   # shared engine lifecycle (daemon + Android host)
   'src/ui/window.vala',
   'src/ui/home-view.vala',
   'src/ui/settings-view.vala',
   'src/ui/log-view.vala',
-  'src/daemon/daemon.vala',
-  'src/daemon/control.vala',
-  'src/daemon/tray.vala',
   'src/controller/client.vala',
   'src/controller/service.vala',
+  'src/android/engine_host.vala',   # #if ANDROID — empty elsewhere
 )
+if host_machine.system() != 'android'
+  # The separate daemon, its D-Bus control surface, and the tray (built on
+  # libstation's Station.Tray) are desktop-only.
+  sources += files(
+    'src/daemon/daemon.vala',
+    'src/daemon/control.vala',
+    'src/tray.vala',
+  )
+endif
+
+# Platform-specific extras. The tray, control IPC, shell helpers and the Android
+# background-operation backend now all come from libstation (one Vala API, native
+# backends inside the lib), so the macOS/Windows/Android C/Obj-C/JNI glue is gone;
+# only the Windows icon resource remains app-specific.
+win_sources = []
+extra_deps = []
+extra_link_args = []
+inc_dirs = ['.']
+if host_machine.system() == 'windows'
+  # Embed the app icon (Explorer/taskbar + the icon libstation's tray loads from
+  # the exe's first resource) via a linked resource.
+  windows_mod = import('windows')
+  win_sources = windows_mod.compile_resources('data/windows/another-tgproxy.rc',
+    include_directories: include_directories('data/windows'),
+    depend_files: files('data/windows/another-tgproxy.ico'))
+endif
+
+# android_exe_type is a Pixiewood meson-fork kwarg; only pass it when targeting
+# Android so plain meson doesn't choke on an unknown kwarg.
+exe_kwargs = {}
+if host_machine.system() == 'android'
+  exe_kwargs = {'android_exe_type': 'application'}
+elif host_machine.system() == 'windows'
+  # GUI subsystem: neither the app nor the spawned --daemon flashes a console.
+  exe_kwargs = {'win_subsystem': 'windows'}
+endif
 
 executable('another-tgproxy',
-  sources, config_h, resources,
-  dependencies: deps,
+  sources, win_sources, config_h, resources,
+  dependencies: deps + extra_deps,
   vala_args: vala_extra,
   c_args: ['-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name())],
-  include_directories: include_directories('.'),
+  link_args: extra_link_args,
+  include_directories: include_directories(inc_dirs),
+  kwargs: exe_kwargs,
   install: true,
 )
 
 subdir('po')
 subdir('data')
 
-gnome.post_install(
-  gtk_update_icon_cache: true,
-  update_desktop_database: true,
-)
+# Desktop-install hooks (icon cache / desktop database). Skipped on the Android
+# cross build: they'd run cross-built host tools (gtk4-update-icon-cache) that
+# need an exe_wrapper, and an APK has no such caches anyway.
+if host_machine.system() == 'linux'
+  gnome.post_install(
+    gtk_update_icon_cache: true,
+    update_desktop_database: true,
+  )
+endif

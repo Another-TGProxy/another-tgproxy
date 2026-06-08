@@ -1,0 +1,76 @@
+name: Flatpak bundle
+
+# Builds a single-file .flatpak bundle and attaches it to the release. (The
+# separate publish-flatpak.yml pushes to the Ampernic Flatpak repo instead.)
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths: &paths
+      - 'src/**'
+      - 'data/**'
+      - 'po/**'
+      - 'meson.build'
+      - 'packaging/flatpak/**'
+      - '.github/workflows/flatpak-bundle.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-49
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Render manifest (pin core + gui commits)
+        env:
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          set -euo pipefail
+          CORE=https://github.com/Another-TGProxy/mtproxy-ws.git
+          CORE_COMMIT=$(git ls-remote "$CORE" refs/heads/main | cut -f1)
+          STATION=https://github.com/Ampernic/libstation.git
+          STATION_COMMIT=$(git ls-remote "$STATION" refs/heads/master | cut -f1)
+          VERSION="${RELEASE_VERSION#v}"
+          [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+          # Inject the displayed version into the gui module, or drop the placeholder.
+          if [ -n "${RELEASE_VERSION:-}" ]; then
+            VOPT="s|__GUI_VERSION_OPT__|-Drelease_version=$VERSION|g"
+          else
+            VOPT="/__GUI_VERSION_OPT__/d"
+          fi
+          sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
+              -e "s/__GUI_COMMIT__/${{ github.sha }}/g" \
+              -e "s/__STATION_COMMIT__/$STATION_COMMIT/g" \
+              -e "$VOPT" \
+              packaging/flatpak/space.ampernic.AnotherTGProxy.yml \
+              > packaging/flatpak/_rendered.yml
+          echo "BUNDLE=AnotherTGProxy-$VERSION-linux-x86_64.flatpak" >> "$GITHUB_ENV"
+
+      - name: Build .flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ${{ env.BUNDLE }}
+          manifest-path: packaging/flatpak/_rendered.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: another-tgproxy-flatpak
+          path: ${{ env.BUNDLE }}
+          retention-days: 14
+
+      - name: Release on tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.BUNDLE }}
+          prerelease: ${{ contains(github.ref_name, '-') }}

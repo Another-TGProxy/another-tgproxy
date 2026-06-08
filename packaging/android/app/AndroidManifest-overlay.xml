@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Manifest-merger overlay. Dropped into the generated project's debug build-type
+     source set (app/src/debug/AndroidManifest.xml); the Android Gradle manifest
+     merger combines it with Pixiewood's generated main manifest. It points the
+     <application> at our RuntimeApplication subclass and declares the foreground
+     ProxyService plus its permissions — keeping the in-process proxy alive when
+     the app is backgrounded. No post-hoc XML editing: the merger does the work. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- In-app update: commit the downloaded APK via PackageInstaller. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
+    <application android:name="space.ampernic.anothertgproxy.ProxyApplication"
+                 tools:replace="android:name">
+        <!-- One task only: relaunching from the launcher brings the existing
+             instance forward instead of starting a second copy. -->
+        <activity android:name="org.gtk.android.ToplevelActivity"
+                  android:launchMode="singleTask"
+                  tools:replace="android:launchMode"/>
+        <service android:name="space.ampernic.anothertgproxy.ProxyService"
+                 android:exported="false"
+                 android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                      android:value="proxy"/>
+        </service>
+    </application>
+</manifest>

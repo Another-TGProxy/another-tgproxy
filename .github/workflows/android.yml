@@ -1,0 +1,266 @@
+name: Android (experimental)
+
+# GTK-on-Android (Pixiewood) build of the real app. Single-process: the C engine
+# (mtproxy-ws, pulled as a meson subproject) runs in the GUI process — no daemon,
+# D-Bus or tray (those Vala paths are behind #if !ANDROID). OpenSSL, which the core
+# links for the outbound wss:// TLS, is cross-built static and staged into the NDK
+# sysroot.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'data/**'
+      - 'po/**'
+      - 'meson.build'
+      - 'subprojects/**'
+      - 'packaging/android/**'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: write   # attach the APK to the release on tag
+
+env:
+  OPENSSL_BRANCH: openssl-3.3
+  ANDROID_API: '35'
+
+jobs:
+  app-apk:
+    runs-on: ubuntu-latest
+    # Release signing: set these repo secrets to ship a release-signed APK;
+    # without them the build falls back to a debug APK (so PRs/forks stay green).
+    env:
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/lib/android/sdk/ndk || true
+          df -h /
+
+      - name: Host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ninja-build sassc glslc libxml2-utils \
+            libglib2.0-dev-bin gobject-introspection python3 gettext \
+            valac libgtk-4-dev libadwaita-1-dev libjson-glib-dev \
+            blueprint-compiler desktop-file-utils \
+            libglib-perl libglib-object-introspection-perl libipc-run-perl \
+            libjson-perl libset-scalar-perl libxml-libxml-perl libxml-libxslt-perl \
+            gir1.2-appstream-1.0 openjdk-17-jdk-headless
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK + platform + build-tools
+        run: |
+          yes | sdkmanager --install \
+            "platform-tools" "platforms;android-${ANDROID_API}" \
+            "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1" >/dev/null
+          ls "$ANDROID_HOME/ndk"
+
+      - name: OpenSSL (static, arm64) into the NDK sysroot
+        run: |
+          set -eux
+          NDK=$(ls -d "$ANDROID_HOME/ndk/"*/ | head -n1)
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+          export ANDROID_NDK_ROOT="$NDK"
+          export PATH="$TOOLCHAIN/bin:$PATH"
+          git clone --depth 1 -b "$OPENSSL_BRANCH" \
+            https://github.com/openssl/openssl "$RUNNER_TEMP/openssl"
+          cd "$RUNNER_TEMP/openssl"
+          ./Configure android-arm64 "-D__ANDROID_API__=$ANDROID_API" \
+            no-shared no-tests no-apps --prefix="$RUNNER_TEMP/ossl"
+          make -j"$(nproc)" >/dev/null
+          make install_sw >/dev/null
+          # The core's cc.find_library('ssl'/'crypto') searches the cross
+          # compiler's default paths, i.e. the NDK sysroot.
+          SYS="$TOOLCHAIN/sysroot/usr"
+          cp -v "$RUNNER_TEMP/ossl/lib/libssl.a" \
+                "$RUNNER_TEMP/ossl/lib/libcrypto.a" \
+                "$SYS/lib/aarch64-linux-android/"
+          cp -rv "$RUNNER_TEMP/ossl/include/openssl" "$SYS/include/"
+
+      - name: Current gtk4/libadwaita vapi + typelib for host valac/blueprint
+        run: |
+          set -eux
+          # ubuntu-latest ships libadwaita 1.5; the app needs 1.7 widgets
+          # (Adw.WrapBox/ToggleGroup/ButtonRow). valac (host vapi) and
+          # blueprint-compiler (host GI typelib) both need the newer defs.
+          # Cross-built target libs come from Pixiewood; this only updates the
+          # HOST tooling. Arch's rolling packages have stable download URLs.
+          sudo apt-get install -y --no-install-recommends zstd libarchive-tools
+          D="$RUNNER_TEMP/arch"; mkdir -p "$D"; cd "$D"
+          for p in gtk4 libadwaita; do
+            curl -fL "https://archlinux.org/packages/extra/x86_64/$p/download/" -o "$p.pkg.tar.zst"
+            bsdtar -xf "$p.pkg.tar.zst"
+          done
+          # Overlay the newer vapis where valac looks.
+          for v in /usr/share/vala*/vapi; do
+            sudo cp -vf usr/share/vala/vapi/gtk4.vapi usr/share/vala/vapi/gtk4.deps \
+                        usr/share/vala/vapi/libadwaita-1.vapi usr/share/vala/vapi/libadwaita-1.deps \
+                        "$v"/ || true
+          done
+          # valac gates "[Version (since=...)]" symbols on the host pkg-config
+          # modversion; apt's libadwaita-1.pc still says 1.5, so the 1.7 widgets
+          # in the overlaid vapi get rejected. Bump it (the target C side reads
+          # the cross pkg-config from Pixiewood, not this).
+          for pc in /usr/lib/*/pkgconfig/libadwaita-1.pc /usr/lib/pkgconfig/libadwaita-1.pc; do
+            [ -f "$pc" ] && sudo sed -i 's/^Version:.*/Version: 1.7.0/' "$pc"
+          done
+          # Expose the newer typelibs (prepended) to blueprint-compiler.
+          echo "GI_TYPELIB_PATH=$D/usr/lib/girepository-1.0" >> "$GITHUB_ENV"
+
+      - name: Forked meson (android branch) + Pixiewood
+        run: |
+          git clone --depth 1 -b android-apk https://github.com/sp1ritCS/meson "$RUNNER_TEMP/meson"
+          git clone --depth 1 https://github.com/sp1ritCS/gtk-android-builder "$RUNNER_TEMP/pw"
+          # Recent GTK's Android backend uses API-35 keycodes; Pixiewood pins the
+          # NDK clang target to API 31. Bump it to 35.
+          sed -i "s/+'31-clang/+'${ANDROID_API}-clang/g" "$RUNNER_TEMP/pw/prepare/android.cross"
+          # Pixiewood installs only --tags runtime; meson tags .mo catalogs 'i18n',
+          # so translations would be dropped. Include them.
+          sed -i 's/"--tags", "runtime")/"--tags", "runtime,i18n")/' "$RUNNER_TEMP/pw/pixiewood"
+          # Pixiewood needs the FORKED meson everywhere (only it understands
+          # android_exe_type), both via --meson and as plain `meson` on PATH.
+          printf '#!/bin/sh\nexec python3 "%s/meson.py" "$@"\n' "$RUNNER_TEMP/meson" \
+            | sudo tee /usr/local/bin/meson >/dev/null
+          sudo chmod +x /usr/local/bin/meson
+          meson --version
+
+      - name: Build app APK (Pixiewood)
+        run: |
+          set -x
+          PW="$RUNNER_TEMP/pw/pixiewood"
+          # Bake the release-tag version into meson_options.txt BEFORE Pixiewood
+          # configures meson (it does so at generate), so the About dialog shows it.
+          # Pixiewood drives meson itself, so we can't pass -Drelease_version.
+          VERSION="${RELEASE_VERSION#v}"
+          if [ -n "$VERSION" ]; then
+            sed -i "s|value: '',|value: '$VERSION',|" meson_options.txt
+            grep -n "release_version" -A2 meson_options.txt
+          fi
+          # Run from the repo root: meson.build is here, so the manifest's src://
+          # paths resolve against it.
+          perl "$PW" prepare packaging/android/app/pixiewood.xml \
+            --sdk "$ANDROID_HOME" \
+            --android-studio-dir "$ANDROID_HOME" \
+            --meson /usr/local/bin/meson -v
+          perl "$PW" generate -v
+          # Add the foreground service (keeps the proxy alive when backgrounded):
+          # the Java sources, plus a manifest-merger overlay in the debug build-type
+          # source set that gradle merges with Pixiewood's generated manifest.
+          APP=.pixiewood/android/app
+          mkdir -p "$APP/src/main/java/space/ampernic/anothertgproxy" "$APP/src/debug" "$APP/src/release"
+          cp packaging/android/app/java/*.java "$APP/src/main/java/space/ampernic/anothertgproxy/"
+          # The overlay (ProxyApplication/ProxyService/perms) must merge into both
+          # build types' manifests, so install it in each build-type source set.
+          cp packaging/android/app/AndroidManifest-overlay.xml "$APP/src/debug/AndroidManifest.xml"
+          cp packaging/android/app/AndroidManifest-overlay.xml "$APP/src/release/AndroidManifest.xml"
+          # GTK/Pixiewood dlopen() native .so by path, so they must be unpacked to
+          # disk. Debug does this by default; release packs them in the APK and the
+          # app crashes on launch. Force legacy (extracted) jniLibs packaging via
+          # the DSL — AGP rejects android:extractNativeLibs in the manifest now.
+          if [ -f "$APP/build.gradle" ]; then
+            printf '\nandroid { packagingOptions { jniLibs { useLegacyPackaging true } } }\n' >> "$APP/build.gradle"
+          elif [ -f "$APP/build.gradle.kts" ]; then
+            printf '\nandroid { packaging { jniLibs { useLegacyPackaging = true } } }\n' >> "$APP/build.gradle.kts"
+          fi
+          # Themed (monochrome) launcher icon: Pixiewood emits no <monochrome>
+          # layer, so add one to every adaptive-icon, reusing the foreground art as
+          # the silhouette (the launcher tints it to the system theme).
+          for aix in $(find .pixiewood -path '*mipmap*/ic_launcher*.xml'); do
+            resdir="$(dirname "$(dirname "$aix")")"
+            mkdir -p "$resdir/drawable"
+            cp packaging/android/app/foreground.xml "$resdir/drawable/ic_launcher_monochrome.xml"
+            grep -q '<monochrome' "$aix" || sed -i \
+              's#</adaptive-icon>#    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>\n</adaptive-icon>#' "$aix"
+            # Gradient background (like the desktop icon) instead of the flat colour.
+            cp packaging/android/app/ic_launcher_background.xml "$resdir/drawable/ic_launcher_background.xml"
+            sed -i 's#@color/ic_launcher_background#@drawable/ic_launcher_background#' "$aix"
+          done
+          echo "::group::launcher icon resources"
+          find .pixiewood -path '*res*ic_launcher*' | sort
+          for x in $(find .pixiewood -path '*mipmap*/ic_launcher*.xml'); do echo "--- $x ---"; cat "$x"; done
+          echo "::endgroup::"
+          # Pixiewood's build stages the native libs + GTK runtime into the gradle
+          # project (and assembles debug). Always run it; for a signed release,
+          # assemble the release variant on top — it reuses those staged libs.
+          perl "$PW" build
+          if [ -n "${ANDROID_KEYSTORE_B64:-}" ]; then
+            echo "::notice::keystore secret present — assembling release APK"
+            ( cd .pixiewood/android && ./gradlew --no-daemon assembleRelease )
+          else
+            echo "::warning::no ANDROID_KEYSTORE_B64 — shipping the debug APK"
+          fi
+
+      - name: Sign release APKs
+        if: env.ANDROID_KEYSTORE_B64 != ''
+        run: |
+          set -e
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ks.jks"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          # Re-sign every release APK with our key (the generated project may have
+          # left it unsigned or debug-signed); normalise the name to *-release.apk.
+          for apk in $(find .pixiewood -path '*/release/*.apk'); do
+            out="${apk%-unsigned.apk}"; out="${out%.apk}.apk"
+            "$BT/zipalign" -p -f 4 "$apk" "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" sign --ks "$RUNNER_TEMP/ks.jks" \
+              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+              --out "$out" "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" verify --print-certs "$out" | head -1
+          done
+          rm -f "$RUNNER_TEMP/ks.jks" "$RUNNER_TEMP/aligned.apk"
+
+      - name: Collect APKs
+        if: always()
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/android-apks"
+          VERSION="${RELEASE_VERSION#v}"
+          [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
+          # Prefer the signed release APKs; fall back to whatever was built (debug).
+          apks="$(find .pixiewood -path '*/release/*-release.apk' 2>/dev/null || true)"
+          [ -n "$apks" ] || apks="$(find . -name '*.apk' ! -name '*-unsigned.apk')"
+          # Name: AnotherTGProxy-<version>-android-<abi>.apk
+          echo "$apks" | while read -r apk; do
+            [ -n "$apk" ] || continue
+            case "$apk" in
+              *arm64-v8a*)   abi=arm64-v8a ;;
+              *armeabi-v7a*) abi=armeabi-v7a ;;
+              *x86_64*)      abi=x86_64 ;;
+              *universal*)   abi=universal ;;
+              *)             abi=universal ;;
+            esac
+            cp -v "$apk" "$GITHUB_WORKSPACE/android-apks/AnotherTGProxy-$VERSION-android-$abi.apk"
+          done
+          ls -la "$GITHUB_WORKSPACE/android-apks/" || true
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: another-tgproxy-android
+          path: android-apks/*.apk
+          if-no-files-found: warn
+
+      - name: Release on tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android-apks/*.apk
+          prerelease: ${{ contains(github.ref_name, '-') }}

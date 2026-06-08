@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Static AppStream metadata for the Android build. Pixiewood reads it to derive
+     the package id, version code and permissions; the <requires><internet/> here
+     is what makes generate add INTERNET + ACCESS_NETWORK_STATE to the manifest
+     (the proxy connects out over wss://). The desktop build uses the templated
+     metainfo under data/ instead. -->
+<component type="desktop-application" xmlns="https://specifications.freedesktop.org/metainfo/1.0">
+  <id>space.ampernic.AnotherTGProxy</id>
+  <name>Another TGProxy</name>
+  <summary>MTProto-over-WebSocket Telegram proxy</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>A Telegram MTProto proxy that bridges to backends over secure WebSocket,
+       running entirely on-device in a single process.</p>
+  </description>
+  <launchable type="desktop-id">space.ampernic.AnotherTGProxy.desktop</launchable>
+  <requires>
+    <internet bandwidth_mbitps="1">always</internet>
+  </requires>
+  <releases>
+    <release version="2.0.0" date="2026-06-04"/>
+  </releases>
+</component>

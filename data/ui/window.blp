@@ -50,6 +50,12 @@ template $TgWsProxyWindow : Adw.ApplicationWindow {
         revealed: false;
       }
 
+      [top]
+      Adw.Banner update_banner {
+        button-label: _("Details");
+        revealed: false;
+      }
+
       content: Adw.ViewStack stack {
         Adw.ViewStackPage {
           name: "home";

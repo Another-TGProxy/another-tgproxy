@@ -10,8 +10,8 @@ namespace TgWsProxy {
         public string config_file () {
             return Path.build_filename (app_dir (), "config.json");
         }
-        public string control_sock () {
-            return Path.build_filename (app_dir (), "control.sock");
+        public string pid_file () {
+            return Path.build_filename (app_dir (), "daemon.pid");
         }
         public string log_file () {
             return Path.build_filename (app_dir (), "proxy.log");
@@ -38,6 +38,7 @@ namespace TgWsProxy {
         public int pool_size = 4;
         public double log_max_mb = 5;
         public bool check_updates = true;
+        public string update_channel = "";               // ""=auto by build; stable|beta
         public string appearance = "auto";               // auto|light|dark
         public bool tray = false;                         // Linux default off
         public bool autostart = false;
@@ -70,6 +71,7 @@ namespace TgWsProxy {
                 c.save ();
                 return c;
             }
+            bool parsed = false;
             try {
                 var parser = new Json.Parser ();
                 parser.load_from_file (path);
@@ -95,6 +97,7 @@ namespace TgWsProxy {
                 if (o.has_member ("pool_size")) c.pool_size = (int) o.get_int_member ("pool_size");
                 if (o.has_member ("log_max_mb")) c.log_max_mb = o.get_double_member ("log_max_mb");
                 if (o.has_member ("check_updates")) c.check_updates = o.get_boolean_member ("check_updates");
+                if (o.has_member ("update_channel")) c.update_channel = o.get_string_member ("update_channel");
                 if (o.has_member ("appearance")) c.appearance = o.get_string_member ("appearance");
                 if (o.has_member ("tray")) c.tray = o.get_boolean_member ("tray");
                 if (o.has_member ("autostart")) c.autostart = o.get_boolean_member ("autostart");
@@ -102,10 +105,15 @@ namespace TgWsProxy {
                     c.status_template = o.get_string_member ("status_template");
                 if (o.has_member ("status_mode"))
                     c.status_mode = o.get_string_member ("status_mode");
+                parsed = true;
             } catch (Error e) {
                 warning ("config load failed: %s", e.message);
             }
-            if (c.secret.length != 32) {
+            // Only (re)generate + persist the secret when the file genuinely
+            // parsed but lacks a valid one. On a read/parse failure, keep defaults
+            // in memory and DON'T save — overwriting here would destroy a config
+            // that merely failed to read (e.g. mid-write or a transient FS error).
+            if (parsed && c.secret.length != 32) {
                 c.secret = gen_secret ();
                 c.save ();
             }
@@ -146,6 +154,7 @@ namespace TgWsProxy {
             b.set_member_name ("pool_size"); b.add_int_value (pool_size);
             b.set_member_name ("log_max_mb"); b.add_double_value (log_max_mb);
             b.set_member_name ("check_updates"); b.add_boolean_value (check_updates);
+            b.set_member_name ("update_channel"); b.add_string_value (update_channel);
             b.set_member_name ("appearance"); b.add_string_value (appearance);
             b.set_member_name ("tray"); b.add_boolean_value (tray);
             b.set_member_name ("autostart"); b.add_boolean_value (autostart);
@@ -180,6 +189,7 @@ namespace TgWsProxy {
                 if (d.strip () != "") e.add_worker_domain (d.strip ());
             e.set_fake_tls (fake_tls_domain.strip ());
             e.set_pool_size (pool_size);
+            e.set_verbose (verbose);
         }
     }
 }

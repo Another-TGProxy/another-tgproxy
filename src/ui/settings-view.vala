@@ -14,10 +14,15 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.SwitchRow verify_cf_row;
         [GtkChild] private unowned Adw.SpinRow pool_row;
         [GtkChild] private unowned Adw.SwitchRow logfile_row;
+        [GtkChild] private unowned Adw.SwitchRow verbose_row;
         [GtkChild] private unowned Adw.SwitchRow autostart_row;
+        [GtkChild] private unowned Adw.SwitchRow updates_row;
+        [GtkChild] private unowned Adw.ComboRow channel_row;
+        [GtkChild] private unowned Adw.PreferencesGroup status_display_group;
         [GtkChild] private unowned Adw.ToggleGroup status_mode_group;
         [GtkChild] private unowned Adw.PreferencesGroup status_text_group;
         [GtkChild] private unowned Adw.EntryRow status_row;
+        [GtkChild] private unowned Adw.ButtonRow notif_settings_row;
         [GtkChild] private unowned Adw.ButtonRow save_row;
 
         public signal void toast (string message);
@@ -40,7 +45,14 @@ namespace TgWsProxy {
             verify_cf_banner.revealed = !cfg.verify_cf;
             pool_row.value = cfg.pool_size;
             logfile_row.active = cfg.log_to_file;
+            verbose_row.active = cfg.verbose;
             autostart_row.active = service.is_autostart ();
+            updates_row.active = cfg.check_updates;
+            updates_row.visible = Platform.get_default ().updates_relevant ();
+            channel_row.visible = Platform.get_default ().updates_relevant ();
+            var ch = cfg.update_channel;
+            if (ch == "") ch = Build.VERSION.contains ("-") ? "beta" : "stable";
+            channel_row.selected = (ch == "beta") ? 1 : 0;
             status_row.text = cfg.status_template;
 
             regen_btn.clicked.connect (() => { secret_row.text = Config.gen_secret (); });
@@ -52,7 +64,26 @@ namespace TgWsProxy {
             });
             save_row.activated.connect (save_settings);
 
+#if ANDROID
+            // The only status display on Android is the foreground-service
+            // notification — no modes to pick. Keep the text template (it drives
+            // the notification) and offer the system notification settings.
+            status_display_group.visible = false;
+            status_text_group.visible = true;
+            notif_settings_row.visible = true;
+            // No login autostart on Android (the engine is tied to the activity
+            // process; a headless boot service is out of scope) — hide the toggle.
+            autostart_row.visible = false;
+            notif_settings_row.activated.connect (() => {
+                var win = get_root () as Gtk.Window;
+                if (win == null) return;
+                var surface = win.get_surface ();
+                if (surface != null) Station.android_open_notification_settings (surface);
+            });
+#else
+            notif_settings_row.visible = false;
             setup_status_modes ();
+#endif
         }
 
         private void setup_status_modes () {
@@ -88,6 +119,9 @@ namespace TgWsProxy {
             cfg.verify_cf = verify_cf_row.active;
             cfg.pool_size = (int) pool_row.value;
             cfg.log_to_file = logfile_row.active;
+            cfg.verbose = verbose_row.active;
+            cfg.check_updates = updates_row.active;
+            cfg.update_channel = (channel_row.selected == 1) ? "beta" : "stable";
             cfg.autostart = autostart_row.active;
             if (status_row.text.strip () != "") cfg.status_template = status_row.text.strip ();
             cfg.status_mode = status_mode_group.active_name ?? "auto";

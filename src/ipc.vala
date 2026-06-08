@@ -13,6 +13,18 @@ namespace TgWsProxy {
         public int64 bytes_down = 0;
         public string error = "";
 
+        // Expand a status template ({active} {total} {up} {down} {host} {port}).
+        public string format (string template) {
+            var s = template;
+            s = s.replace ("{active}", conn_active.to_string ());
+            s = s.replace ("{total}", conn_total.to_string ());
+            s = s.replace ("{up}", human_bytes (bytes_up));
+            s = s.replace ("{down}", human_bytes (bytes_down));
+            s = s.replace ("{host}", host);
+            s = s.replace ("{port}", port.to_string ());
+            return s;
+        }
+
         // newline-delimited JSON (one object per line)
         public string to_line () {
             var b = new Json.Builder ();
