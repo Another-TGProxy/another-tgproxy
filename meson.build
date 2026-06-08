@@ -80,7 +80,7 @@ deps = [
 # so every bundle ships it. Its Vala binding is a committed vapi located via the
 # `vapidir` dep variable (added to vala_extra below). introspection=disabled: the
 # app only needs the vapi, so the subproject skips GIR (and the g-ir-scanner dep).
-station_dep = dependency('station-1',
+station_dep = dependency('libstation-1',
   fallback: ['libstation', 'station_dep'],
   default_options: ['introspection=disabled'])
 deps += station_dep
