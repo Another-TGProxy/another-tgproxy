@@ -63,6 +63,15 @@ namespace TgWsProxy {
                 // release asset (libstation resolves the asset URL + checks SHA-256).
                 var schema = new Station.ReleaseSchema.github ();
                 schema.set_checksums_asset ("SHA256SUMS");
+                // Release builds require a minisign signature of the checksums
+                // (verified against this baked-in public key, so a compromised
+                // release host cannot serve a malicious update). Dev builds verify
+                // hashes only, so they can still update to unsigned test releases.
+                if (!Build.IS_DEVEL) {
+                    schema.set_signature_asset ("SHA256SUMS.minisig");
+                    schema.set_public_key (
+                        "RWRPM5OxKHSDb1FxBh6td77H5v3omk9CQZpdvGhMF/OwbIfJkf3rh/02");
+                }
                 updater = new Station.Updates.with_schema (schema,
                     "Another-TGProxy/another-tgproxy", Build.VERSION);
                 // Channels this build offers; the prerelease keywords each accepts.
