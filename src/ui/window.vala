@@ -59,7 +59,12 @@ namespace TgWsProxy {
             // Notify about a newer GitHub release where no repo manages updates
             // (Windows/macOS/Android/AppImage). Native/Flatpak Linux uses its repo.
             if (cfg.check_updates && Platform.get_default ().updates_relevant ()) {
-                updater = new Station.Updates ("Another-TGProxy/another-tgproxy", Build.VERSION);
+                // GitHub releases; downloads are verified against the SHA256SUMS
+                // release asset (libstation resolves the asset URL + checks SHA-256).
+                var schema = new Station.ReleaseSchema.github ();
+                schema.set_checksums_asset ("SHA256SUMS");
+                updater = new Station.Updates.with_schema (schema,
+                    "Another-TGProxy/another-tgproxy", Build.VERSION);
                 // Channels this build offers; the prerelease keywords each accepts.
                 updater.add_channel ("stable", null);
                 updater.add_channel ("beta", { "beta", "rc", "alpha" });
@@ -152,11 +157,6 @@ namespace TgWsProxy {
 #endif
         }
 
-        private string asset_url () {
-            return "https://github.com/Another-TGProxy/another-tgproxy/releases/download/v%s/%s"
-                .printf (update_version, asset_filename ());
-        }
-
         private string asset_dest () {
 #if ANDROID
             // gdk-android points XDG_DATA_HOME at the app's external files dir
@@ -179,7 +179,9 @@ namespace TgWsProxy {
             downloading = true;
             if (dl_btn != null) { dl_btn.sensitive = false; dl_btn.label = _("Downloading…"); }
             if (dl_bar != null) { dl_bar.visible = true; dl_bar.fraction = 0; dl_bar.text = ""; }
-            updater.download (asset_url (), dest);
+            // libstation resolves the asset URL from the available release and
+            // verifies its SHA-256 against the SHA256SUMS asset.
+            updater.download_checked (asset_filename (), dest);
         }
 
         private void on_dl_progress (double frac) {
