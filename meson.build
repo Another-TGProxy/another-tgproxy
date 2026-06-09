@@ -84,6 +84,17 @@ station_dep = dependency('libstation-1',
   fallback: ['libstation', 'station_dep'],
   default_options: ['introspection=disabled'])
 deps += station_dep
+# libqshub: register a GNOME Quick Settings entry through the quick-settings-hub
+# extension (Linux/GNOME only; inert when the hub is absent). Built from source as a
+# subproject; the dep carries its committed vapi via the vapidir variable. The Vala
+# code is behind #if HAVE_QSHUB (the --define is added on Linux below).
+qshub_dep = []
+if host_machine.system() == 'linux'
+  qshub_dep = dependency('qshub-1',
+    fallback: ['quick-settings-hub', 'qshub_dep'],
+    default_options: ['introspection=disabled'])
+  deps += qshub_dep
+endif
 # gio-unix (Unix sockets, GDesktopAppInfo) is Linux/macOS-only; Windows uses TCP
 # + token IPC and has no .desktop, all behind #if WINDOWS.
 if host_machine.system() != 'windows'
@@ -133,6 +144,15 @@ if host_machine.system() == 'android'
   vala_extra += ['--pkg', 'libstation-android-1']
 endif
 
+# libqshub's committed vapi + the HAVE_QSHUB guard (Linux only).
+if host_machine.system() == 'linux'
+  qshub_vapidir = qshub_dep.get_variable('vapidir', default_value: '')
+  if qshub_vapidir != ''
+    vala_extra += ['--vapidir', qshub_vapidir]
+  endif
+  vala_extra += ['--pkg', 'qshub-1', '--define=HAVE_QSHUB']
+endif
+
 blueprint_compiler = find_program('blueprint-compiler')
 ui_targets = []
 foreach view : ['window', 'home-view', 'settings-view', 'log-view']
@@ -173,6 +193,7 @@ if host_machine.system() != 'android'
     'src/daemon/daemon.vala',
     'src/daemon/control.vala',
     'src/tray.vala',
+    'src/qshub.vala',   # #if HAVE_QSHUB - empty when libqshub is absent (non-Linux)
   )
 endif
 

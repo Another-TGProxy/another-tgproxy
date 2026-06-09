@@ -68,7 +68,16 @@ jobs:
 
       - name: Install NSIS
         shell: pwsh
-        run: choco install nsis -y --no-progress
+        # The chocolatey community feed 504s intermittently; retry so a transient
+        # outage doesn't fail an otherwise-green build.
+        run: |
+          for ($i = 1; $i -le 3; $i++) {
+            choco install nsis -y --no-progress
+            if (Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe') { exit 0 }
+            Write-Host "NSIS install attempt $i failed; retrying in 20s"
+            Start-Sleep -Seconds 20
+          }
+          throw 'NSIS install failed after 3 attempts'
 
       - name: Build app + installer (setup)
         env:

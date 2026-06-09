@@ -8,6 +8,9 @@ namespace TgWsProxy {
         EngineRunner runner = new EngineRunner ();
         Station.ControlServer? control = null;
         TrayController? tray = null;
+#if HAVE_QSHUB
+        QshubController? qshub = null;
+#endif
         Control? control_dbus = null;
         StatusMode current_mode = StatusMode.WINDOW;
         bool quitting = false;
@@ -50,6 +53,11 @@ namespace TgWsProxy {
             if (want_tray && tray == null) setup_tray ();
             else if (!want_tray && tray != null) { tray.close (); tray = null; }
 #endif
+#if HAVE_QSHUB
+            bool want_qshub = current_mode == StatusMode.QUICK_SETTINGS;
+            if (want_qshub && qshub == null) setup_qshub ();
+            else if (!want_qshub && qshub != null) { qshub.close (); qshub = null; }
+#endif
         }
 
         // StatusMode.NOTIFICATION is reserved for an Android foreground-service
@@ -65,6 +73,19 @@ namespace TgWsProxy {
             tray.toggle_requested.connect (toggle_engine);
             tray.restart_requested.connect (restart_engine);
             tray.quit_requested.connect (() => { do_quit (); });
+        }
+#endif
+
+#if HAVE_QSHUB
+        // The GNOME Quick Settings entry via libqshub (the quick-settings-hub
+        // extension). Inert when no hub is installed.
+        void setup_qshub () {
+            qshub = new QshubController ();
+            qshub.open_requested.connect (open_gui);
+            qshub.open_telegram_requested.connect (open_telegram);
+            qshub.toggle_requested.connect (toggle_engine);
+            qshub.restart_requested.connect (restart_engine);
+            qshub.quit_requested.connect (() => { do_quit (); });
         }
 #endif
 
@@ -136,6 +157,9 @@ namespace TgWsProxy {
                 }
             }
             if (tray != null) tray.update (status_message (), runner.running);
+#if HAVE_QSHUB
+            if (qshub != null) qshub.update (status_message (), runner.running);
+#endif
             if (control_dbus != null) {
                 bool r = runner.running;
                 var st = status_message ();
@@ -254,6 +278,9 @@ namespace TgWsProxy {
             if (status_timer != 0) { Source.remove (status_timer); status_timer = 0; }
             runner.stop ();
             if (tray != null) { tray.close (); tray = null; }
+#if HAVE_QSHUB
+            if (qshub != null) { qshub.close (); qshub = null; }
+#endif
             if (control != null) { control.stop (); control = null; }
             cleanup_control ();
             release ();   // drop the hold so the app can exit

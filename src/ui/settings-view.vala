@@ -92,7 +92,7 @@ namespace TgWsProxy {
             add_mode_toggle ("window", _("Window"), true);
             add_mode_toggle ("tray", _("Tray"), p.tray_available ());
             add_mode_toggle ("background", _("Background"), p.background_portal_available ());
-            add_mode_toggle ("quicksettings", _("Quick Settings"), p.extension_installed ());
+            add_mode_toggle ("quicksettings", _("Quick Settings"), p.quick_settings_available ());
 
             status_mode_group.active_name = p.resolve (cfg.status_mode).id ();
             update_text_visibility ();
@@ -125,12 +125,9 @@ namespace TgWsProxy {
             cfg.autostart = autostart_row.active;
             if (status_row.text.strip () != "") cfg.status_template = status_row.text.strip ();
             cfg.status_mode = status_mode_group.active_name ?? "auto";
-            // The quick-settings mode is provided by the GNOME Shell extension —
-            // enable it iff that mode is chosen, disable it for any other.
-            var p = Platform.get_default ();
-            if (p.extension_installed ())
-                p.extension_set_enabled (cfg.status_mode == "quicksettings");
             cfg.save ();
+            // The daemon (re)builds the quick-settings entry via libqshub on reload
+            // when this mode is chosen; no extension to toggle from here anymore.
             client.send ("reload");
             if (!service.is_active ()) service.start ();
             toast (_("Settings saved"));

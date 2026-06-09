@@ -96,3 +96,12 @@ if not is_devel
     )
   endforeach
 endif
+
+# The symbolic icon for the Quick Settings toggle (libqshub -> hub). The now-removed
+# GNOME Shell extension used to ship it; the app installs it itself now, renamed to
+# the app-id so stable and Devel coexist (QshubController loads it by that name).
+install_data(
+  'icons/hicolor/scalable/actions/another-tgproxy-symbolic.svg',
+  install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable' / 'actions',
+  rename: app_id_relevant + '-symbolic.svg',
+)

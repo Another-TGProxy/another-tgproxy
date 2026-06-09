@@ -17,6 +17,7 @@ po/*.pot
 # Wrap-fetched subprojects (proxy-libintl is vendored and tracked)
 /subprojects/mtproxy-ws/
 /subprojects/libstation/
+/subprojects/quick-settings-hub/
 /subprojects/json-glib/
 /subprojects/json-glib-*/
 /subprojects/*.wraplock
