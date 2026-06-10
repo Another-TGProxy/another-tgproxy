@@ -37,12 +37,14 @@ jobs:
           # core/libstation goes in.
           CORE_COMMIT=$(sed -n 's/^revision = //p' subprojects/mtproxy-ws.wrap | head -1)
           STATION_COMMIT=$(sed -n 's/^revision = //p' subprojects/libstation.wrap | head -1)
+          QSHUB_COMMIT=$(sed -n 's/^revision = //p' subprojects/quick-settings-hub.wrap | head -1)
           GUI_COMMIT='${{ github.sha }}'
           if [ "${{ github.ref_type }}" = tag ]; then CHANNEL=stable; else CHANNEL=devel; fi
 
           sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
               -e "s/__GUI_COMMIT__/$GUI_COMMIT/g" \
               -e "s/__STATION_COMMIT__/$STATION_COMMIT/g" \
+              -e "s/__QSHUB_COMMIT__/$QSHUB_COMMIT/g" \
               -e "/__GUI_VERSION_OPT__/d" \
               packaging/flatpak/space.ampernic.AnotherTGProxy.yml > manifest.yml
 

@@ -14,7 +14,7 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
-  - --talk-name=org.gnome.Shell.Extensions
+  - --talk-name=org.gnome.Shell.Extensions.QuickSettingsHub
 
 cleanup:
   - /include
@@ -51,3 +51,9 @@ modules:
         url: https://github.com/Ampernic/libstation.git
         commit: __STATION_COMMIT__
         dest: subprojects/libstation
+      # libqshub is the qshub-1 subproject (the quick-settings-hub.wrap). No network
+      # in the Flatpak build, so place its checkout at subprojects/quick-settings-hub.
+      - type: git
+        url: https://altlinux.space/ampernic/quick-settings-hub.git
+        commit: __QSHUB_COMMIT__
+        dest: subprojects/quick-settings-hub

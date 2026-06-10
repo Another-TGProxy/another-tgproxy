@@ -1,0 +1,10 @@
+# libqshub: a GNOME Quick Settings client, built from source as a subproject so
+# bundled builds ship it. Carries a committed vapi (via the vapidir dep variable);
+# the app just depends on qshub-1 and valac picks up qshub-1.vapi. On ALT a system
+# package would be found first and this fallback is unused. Pinned to a commit.
+[wrap-git]
+url = https://altlinux.space/ampernic/quick-settings-hub.git
+revision = b65140cbdb0af75a435b46f60b296f3602d621fb
+
+[provide]
+qshub-1 = qshub_dep

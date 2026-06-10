@@ -46,6 +46,7 @@ jobs:
           # meson subproject fallback is never used, same as the ALT build).
           CORE_COMMIT=$(sed -n 's/^revision = //p' subprojects/mtproxy-ws.wrap | head -1)
           STATION_COMMIT=$(sed -n 's/^revision = //p' subprojects/libstation.wrap | head -1)
+          QSHUB_COMMIT=$(sed -n 's/^revision = //p' subprojects/quick-settings-hub.wrap | head -1)
           VERSION="${RELEASE_VERSION#v}"
           [ -n "$VERSION" ] || VERSION=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" meson.build | head -1)
           # Inject the displayed version into the gui module, or drop the placeholder.
@@ -57,6 +58,7 @@ jobs:
           sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
               -e "s/__GUI_COMMIT__/${{ github.sha }}/g" \
               -e "s/__STATION_COMMIT__/$STATION_COMMIT/g" \
+              -e "s/__QSHUB_COMMIT__/$QSHUB_COMMIT/g" \
               -e "$VOPT" \
               packaging/flatpak/space.ampernic.AnotherTGProxy.yml \
               > packaging/flatpak/_rendered.yml

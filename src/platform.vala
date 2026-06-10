@@ -95,64 +95,12 @@ namespace TgWsProxy {
             return os == OsKind.LINUX && is_gnome && delivery == DeliveryKind.FLATPAK;
         }
 
-        // The quick-settings toggle is our GNOME Shell extension.
-        public const string EXTENSION_UUID = "another-tgproxy@ampernic.space";
-
+        // The quick-settings toggle is provided by libqshub talking to the
+        // quick-settings-hub extension; it is available when that hub owns its
+        // well-known bus name on the session bus.
         public bool quick_settings_available () {
-            return extension_installed ();
-        }
-
-        // --- GNOME Shell extension (the quick-settings toggle) ---
-
-        public bool extension_installed () {
-            var info = extension_info ();
-            return info != null && info.contains ("uuid");
-        }
-
-        public bool extension_enabled () {
-            var info = extension_info ();
-            if (info == null) return false;
-            var v = info.get ("enabled");
-            return v != null && v.is_of_type (VariantType.BOOLEAN) && v.get_boolean ();
-        }
-
-        public void extension_set_enabled (bool on) {
-            extension_call (on ? "EnableExtension" : "DisableExtension");
-        }
-
-        GLib.HashTable<string, Variant>? extension_info () {
-            if (os != OsKind.LINUX || !is_gnome) return null;
-            try {
-                var conn = Bus.get_sync (BusType.SESSION);
-                var r = conn.call_sync (
-                    "org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
-                    "org.gnome.Shell.Extensions", "GetExtensionInfo",
-                    new Variant ("(s)", EXTENSION_UUID),
-                    new VariantType ("(a{sv})"), DBusCallFlags.NONE, -1, null);
-                Variant dict;
-                r.get ("(@a{sv})", out dict);
-                var h = new GLib.HashTable<string, Variant> (str_hash, str_equal);
-                var it = dict.iterator ();
-                string key;
-                Variant val;
-                while (it.next ("{sv}", out key, out val)) h.insert (key, val);
-                return h;
-            } catch (Error e) {
-                return null;
-            }
-        }
-
-        void extension_call (string method) {
-            try {
-                var conn = Bus.get_sync (BusType.SESSION);
-                conn.call_sync (
-                    "org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
-                    "org.gnome.Shell.Extensions", method,
-                    new Variant ("(s)", EXTENSION_UUID),
-                    new VariantType ("(b)"), DBusCallFlags.NONE, -1, null);
-            } catch (Error e) {
-                warning ("extension %s failed: %s", method, e.message);
-            }
+            return os == OsKind.LINUX && is_gnome
+                && dbus_name_owned ("org.gnome.Shell.Extensions.QuickSettingsHub");
         }
 
         // Reserved for Android (foreground-service ongoing notification). Not used
