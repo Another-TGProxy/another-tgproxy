@@ -2,66 +2,83 @@ using Gtk 4.0;
 using Adw 1;
 
 template $TgWsProxyHomeView : Adw.Bin {
-  child: Adw.StatusPage home_status {
-    icon-name: "network-offline-symbolic";
-    title: _("Stopped");
-    description: _("Daemon is not running");
-    child: Gtk.Box {
-      orientation: vertical;
-      spacing: 24;
-      margin-top: 12;
-      margin-bottom: 12;
-      margin-start: 12;
-      margin-end: 12;
+  child: Adw.Clamp {
+    child: Adw.StatusPage home_status {
+      icon-name: "network-offline-symbolic";
+      title: _("Stopped");
+      description: _("Daemon is not running");
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 24;
+        margin-top: 12;
+        margin-bottom: 12;
+        margin-start: 12;
+        margin-end: 12;
 
-      Adw.WrapBox {
-        halign: fill;
-        align: 0.5;
-        child-spacing: 12;
-        line-spacing: 12;
-
-        Gtk.Button start_btn {
-          label: _("Start");
-          styles ["suggested-action", "pill"]
-        }
-
-        Gtk.Button stop_btn {
-          label: _("Stop");
-          sensitive: false;
-          styles ["destructive-action", "pill"]
-        }
-
-        Gtk.Button restart_btn {
-          label: _("Restart");
-          styles ["pill"]
-        }
-      }
-
-      Adw.PreferencesGroup {
-        Adw.ActionRow link_row {
-          title: _("Connection link");
-          subtitle: "—";
-          subtitle-selectable: true;
-          use-markup: false;
-          activatable-widget: open_btn;
-
-          [suffix]
-          Gtk.Button open_btn {
-            icon-name: "send-to-symbolic";
-            tooltip-text: _("Open in Telegram");
-            valign: center;
-            styles ["flat"]
+        Gtk.Stack buttons {
+          Gtk.StackPage {
+            name: "inactive";
+            child: Gtk.Box {
+              halign: center;
+              Gtk.Button start_btn {
+                label: _("Start");
+                styles ["suggested-action", "pill"]
+              }
+            };
           }
 
-          [suffix]
-          Gtk.Button copy_btn {
-            icon-name: "edit-copy-symbolic";
-            tooltip-text: _("Copy link");
-            valign: center;
-            styles ["flat"]
+          Gtk.StackPage {
+            name: "active";
+            child: Gtk.Box {
+              halign: center;
+              spacing: 9;
+              Gtk.Button stop_btn {
+                label: _("Stop");
+                sensitive: false;
+                styles ["destructive-action", "pill"]
+              }
+
+              Gtk.Button restart_btn {
+                styles ["circular"]
+
+                Adw.ButtonContent {
+                  margin-top: 15;
+                  margin-end: 15;
+                  margin-bottom: 15;
+                  margin-start: 15;
+                  icon-name: "view-refresh-symbolic";
+                }
+              }
+            };
           }
         }
-      }
+
+        Adw.PreferencesGroup {
+          Adw.ActionRow link_row {
+            title: _("Connection link");
+            subtitle: "—";
+            subtitle-selectable: true;
+            use-markup: false;
+            activatable-widget: open_btn;
+
+            [suffix]
+            Gtk.Button open_btn {
+              icon-name: "send-to-symbolic";
+              tooltip-text: _("Open in Telegram");
+              valign: center;
+              styles ["flat"]
+            }
+
+            [suffix]
+            Gtk.Button copy_btn {
+              icon-name: "edit-copy-symbolic";
+              tooltip-text: _("Copy link");
+              valign: center;
+              styles ["flat"]
+            }
+          }
+        }
+      };
     };
   };
 }
