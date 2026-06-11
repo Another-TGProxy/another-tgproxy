@@ -14,26 +14,41 @@ template $TgWsProxyHomeView : Adw.Bin {
       margin-start: 12;
       margin-end: 12;
 
-      Adw.WrapBox {
-        halign: fill;
-        align: 0.5;
-        child-spacing: 12;
-        line-spacing: 12;
-
-        Gtk.Button start_btn {
-          label: _("Start");
-          styles ["suggested-action", "pill"]
+      Gtk.Stack buttons {
+        Gtk.StackPage {
+          name: "inactive";
+          child: Gtk.Box {
+            halign: center;
+            Gtk.Button start_btn {
+              label: _("Start");
+              styles ["suggested-action", "pill"]
+            }
+          };
         }
 
-        Gtk.Button stop_btn {
-          label: _("Stop");
-          sensitive: false;
-          styles ["destructive-action", "pill"]
-        }
+        Gtk.StackPage {
+          name: "active";
+          child: Gtk.Box {
+            halign: center;
+            spacing: 9;
+            Gtk.Button stop_btn {
+              label: _("Stop");
+              sensitive: false;
+              styles ["destructive-action", "pill"]
+            }
 
-        Gtk.Button restart_btn {
-          label: _("Restart");
-          styles ["pill"]
+            Gtk.Button restart_btn {
+              styles ["circular"]
+
+              Adw.ButtonContent {
+                margin-top: 15;
+                margin-end: 15;
+                margin-bottom: 15;
+                margin-start: 15;
+                icon-name: "view-refresh-symbolic";
+              }
+            }
+          };
         }
       }
 

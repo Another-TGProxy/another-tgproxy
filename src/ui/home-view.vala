@@ -11,6 +11,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Gtk.Button restart_btn;
         [GtkChild] private unowned Gtk.Button open_btn;
         [GtkChild] private unowned Gtk.Button copy_btn;
+        [GtkChild] private unowned Gtk.Stack buttons;
 
         public signal void toast (string message);
 
@@ -80,9 +81,11 @@ namespace TgWsProxy {
             start_btn.sensitive = !r;
             stop_btn.sensitive = r;
             restart_btn.sensitive = r;   // only restart a running proxy
+            buttons.visible_child_name = r ? "active" : "inactive";
         }
 
         private void on_connection (bool connected) {
+            buttons.visible_child_name = connected ? "active" : "inactive";
             if (!connected) {
                 home_status.icon_name = "network-offline-symbolic";
                 home_status.title = _("Stopped");
