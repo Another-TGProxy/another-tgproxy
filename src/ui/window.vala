@@ -115,7 +115,7 @@ namespace TgWsProxy {
                 return;
             var dlg = new Adw.Dialog () {
                 title = _("Update available: %s").printf (update_version),
-                content_width = 480, content_height = 400
+                content_width = 480
             };
             var tv = new Adw.ToolbarView ();
             tv.add_top_bar (new Adw.HeaderBar ());
@@ -124,11 +124,15 @@ namespace TgWsProxy {
                 margin_top = 12, margin_bottom = 12, margin_start = 12, margin_end = 12
             };
             if (update_notes != "") {
-                var label = new Gtk.Label (update_notes) {
-                    wrap = true, xalign = 0, yalign = 0, selectable = true
+                // Release notes are Markdown; render them. Not selectable (no text
+                // copying), and the scroller sizes to the notes (short ones show in
+                // full, long ones scroll) rather than a fixed, clipping height.
+                var label = new Gtk.Label (Markdown.to_pango (update_notes)) {
+                    use_markup = true, wrap = true, xalign = 0, yalign = 0, selectable = false
                 };
                 box.append (new Gtk.ScrolledWindow () {
-                    hscrollbar_policy = Gtk.PolicyType.NEVER, vexpand = true, child = label
+                    hscrollbar_policy = Gtk.PolicyType.NEVER, vexpand = true,
+                    propagate_natural_height = true, max_content_height = 360, child = label
                 });
             }
             dl_bar = new Gtk.ProgressBar () { show_text = true, visible = false };

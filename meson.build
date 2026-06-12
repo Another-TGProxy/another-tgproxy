@@ -174,6 +174,7 @@ sources = files(
   'src/main.vala',
   'src/application.vala',
   'src/config.vala',
+  'src/markdown.vala',
   'src/ipc.vala',
   'src/logging.vala',
   'src/platform.vala',
