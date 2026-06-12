@@ -12,6 +12,9 @@ msgstr ""
 msgid "Home"
 msgstr "Главная"
 
+msgid "What's new"
+msgstr "Что нового"
+
 msgid "Settings"
 msgstr "Настройки"
 

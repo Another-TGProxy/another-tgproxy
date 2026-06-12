@@ -81,6 +81,10 @@ namespace TgWsProxy {
                 var ch = cfg.update_channel;
                 if (ch == "") ch = Build.VERSION.contains ("-") ? "beta" : "stable";
                 updater.set_channel (ch);
+                // Show only the "What's new" block of the release notes, in the
+                // running language: the heading is gettext-translated, so a RU build
+                // asks for "Что нового" and gets that section of a bilingual body.
+                updater.set_notes_section (_("What's new"));
                 updater.available.connect (on_update_available);
                 updater.download_progress.connect (on_dl_progress);
                 updater.downloaded.connect (on_downloaded);
@@ -128,7 +132,9 @@ namespace TgWsProxy {
                 // copying), and the scroller sizes to the notes (short ones show in
                 // full, long ones scroll) rather than a fixed, clipping height.
                 var label = new Gtk.Label (Markdown.to_pango (update_notes)) {
-                    use_markup = true, wrap = true, xalign = 0, yalign = 0, selectable = false
+                    use_markup = true, wrap = true, xalign = 0, yalign = 0, selectable = false,
+                    // Leave room for the overlay scrollbar so it doesn't sit on the text.
+                    margin_end = 12
                 };
                 box.append (new Gtk.ScrolledWindow () {
                     hscrollbar_policy = Gtk.PolicyType.NEVER, vexpand = true,
