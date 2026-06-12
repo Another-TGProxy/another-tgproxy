@@ -43,6 +43,12 @@ int main (string[] args) {
         "Resources");
     localedir = Path.build_filename (mac_res, "locale");
 #endif
+    // Flatpak: the development profile bakes the build-tree po dir into LOCALEDIR
+    // (so `meson devenv` finds catalogs uninstalled), but inside the installed
+    // sandbox the .mo lives at /app/share/locale. A release build already resolves
+    // there, so this is a no-op for it.
+    if (Environment.get_variable ("FLATPAK_ID") != null)
+        localedir = "/app/share/locale";
     Intl.bindtextdomain (Build.GETTEXT_PACKAGE, localedir);
     Intl.bind_textdomain_codeset (Build.GETTEXT_PACKAGE, "UTF-8");
     Intl.textdomain (Build.GETTEXT_PACKAGE);
