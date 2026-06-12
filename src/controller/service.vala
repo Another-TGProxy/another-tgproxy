@@ -85,12 +85,14 @@ namespace TgWsProxy {
                 var sock = new Socket (ip.get_family (), SocketType.STREAM, SocketProtocol.TCP);
                 bool busy = false;
                 try {
-                    // On POSIX, bind with SO_REUSEADDR like the daemon does, so a
+                    // On Linux, bind with SO_REUSEADDR like the daemon does, so a
                     // just-closed port lingering in TIME_WAIT doesn't look "in use"
-                    // (a live daemon still yields EADDRINUSE). On Windows
-                    // SO_REUSEADDR instead lets two sockets share a port, so the
-                    // probe must bind WITHOUT it to detect the running daemon.
-#if WINDOWS
+                    // (a live daemon still yields EADDRINUSE). On Windows AND macOS
+                    // (BSD) SO_REUSEADDR instead lets a second socket share the port
+                    // even while the daemon is listening, so the probe sees it free
+                    // and spawns a doomed second daemon; bind WITHOUT it there so the
+                    // live daemon is detected.
+#if WINDOWS || DARWIN
                     sock.bind (addr, false);
 #else
                     sock.bind (addr, true);
