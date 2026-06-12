@@ -4,7 +4,7 @@
 # package would be found first and this fallback is unused. Pinned to a commit.
 [wrap-git]
 url = https://altlinux.space/ampernic/quick-settings-hub.git
-revision = b65140cbdb0af75a435b46f60b296f3602d621fb
+revision = 9bbbf999418c0cb95fb769b8c287626c471b8d7d
 
 [provide]
 qshub-1 = qshub_dep
