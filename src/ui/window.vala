@@ -128,17 +128,14 @@ namespace TgWsProxy {
                 margin_top = 12, margin_bottom = 12, margin_start = 12, margin_end = 12
             };
             if (update_notes != "") {
-                // Release notes are Markdown; render them. Not selectable (no text
-                // copying), and the scroller sizes to the notes (short ones show in
-                // full, long ones scroll) rather than a fixed, clipping height.
-                var label = new Gtk.Label (Markdown.to_pango (update_notes)) {
-                    use_markup = true, wrap = true, xalign = 0, yalign = 0, selectable = false,
-                    // Leave room for the overlay scrollbar so it doesn't sit on the text.
-                    margin_end = 12
-                };
+                // Release notes are Markdown, rendered as widgets (labels + grids for
+                // tables) so they stay readable on any width. Not selectable (no text
+                // copying); the scroller sizes to the notes (short ones show in full,
+                // long ones scroll) rather than a fixed, clipping height.
                 box.append (new Gtk.ScrolledWindow () {
                     hscrollbar_policy = Gtk.PolicyType.NEVER, vexpand = true,
-                    propagate_natural_height = true, max_content_height = 360, child = label
+                    propagate_natural_height = true, max_content_height = 360,
+                    child = Markdown.render (update_notes)
                 });
             }
             dl_bar = new Gtk.ProgressBar () { show_text = true, visible = false };

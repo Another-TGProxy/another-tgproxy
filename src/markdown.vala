@@ -136,5 +136,72 @@ namespace TgWsProxy {
             }
             return markup;
         }
+
+        // A Markdown table as a real Gtk.Grid: a monospace text block can't stay
+        // aligned once long cells wrap on a narrow screen, so use a grid whose last
+        // column expands and wraps instead.
+        static Gtk.Widget build_grid (GenericArray<GenericArray<string>> rows) {
+            int cols = 0;
+            for (int r = 0; r < rows.length; r++)
+                cols = int.max (cols, rows[r].length);
+            var grid = new Gtk.Grid () {
+                column_spacing = 16, row_spacing = 4, margin_top = 4, margin_bottom = 4
+            };
+            for (int r = 0; r < rows.length; r++) {
+                for (int c = 0; c < rows[r].length; c++) {
+                    string markup = inline (GLib.Markup.escape_text (rows[r][c]));
+                    if (r == 0)
+                        markup = "<b>" + markup + "</b>";
+                    var lbl = new Gtk.Label (markup) {
+                        use_markup = true, xalign = 0, yalign = 0, wrap = true, selectable = false
+                    };
+                    if (c == cols - 1)   // the wide column (e.g. file names) takes the slack
+                        lbl.hexpand = true;
+                    grid.attach (lbl, c, r, 1, 1);
+                }
+            }
+            return grid;
+        }
+
+        // Flush accumulated non-table lines as one Pango label appended to @box.
+        static void flush_text (Gtk.Box box, StringBuilder buf) {
+            string markup = to_pango (buf.str);
+            buf.erase ();
+            if (markup.strip () == "")
+                return;
+            box.append (new Gtk.Label (markup) {
+                use_markup = true, wrap = true, xalign = 0, yalign = 0, selectable = false
+            });
+        }
+
+        // Render @md as a widget: paragraphs/headings/lists become Pango labels and
+        // tables become grids, so notes display correctly even on a narrow screen.
+        // Non-selectable; the caller puts it in a scroller.
+        public Gtk.Widget render (string md) {
+            var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 8) { margin_end = 12 };
+            var lines = md.split ("\n");
+            var buf = new StringBuilder ();
+
+            int i = 0;
+            while (i < lines.length) {
+                if (lines[i].strip ().contains ("|") && i + 1 < lines.length
+                    && is_table_separator (lines[i + 1])) {
+                    flush_text (box, buf);
+                    var rows = new GenericArray<GenericArray<string>> ();
+                    rows.add (table_cells (lines[i].chomp ()));
+                    i += 2;
+                    while (i < lines.length && lines[i].strip ().contains ("|")) {
+                        rows.add (table_cells (lines[i].chomp ()));
+                        i++;
+                    }
+                    box.append (build_grid (rows));
+                    continue;
+                }
+                buf.append (lines[i]).append_c ('\n');
+                i++;
+            }
+            flush_text (box, buf);
+            return box;
+        }
     }
 }
