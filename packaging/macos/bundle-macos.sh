@@ -120,6 +120,12 @@ for so in "$GIO_DST"/*.so; do
   bundle_into "$so" "$FW" || true
 done
 
+info "Bundling CA certificates (macOS has no PEM trust store; glib-networking/GnuTLS + OpenSSL need one)..."
+mkdir -p "$RES/ssl"
+CA="$(brew --prefix ca-certificates 2>/dev/null)/share/ca-certificates/cacert.pem"
+[ -f "$CA" ] || CA="$SSL/etc/openssl@3/cert.pem"
+cp -L "$CA" "$RES/ssl/cert.pem" || { echo "ERROR: no CA bundle at $CA — HTTPS/update check would fail" >&2; exit 1; }
+
 info "Compiling GSettings schemas (GTK4 + Adwaita)..."
 SCHEMAS="$RES/glib-2.0/schemas"; mkdir -p "$SCHEMAS"
 cp "$BREW"/share/glib-2.0/schemas/org.gtk.gtk4.Settings*.xml "$SCHEMAS/" 2>/dev/null || true

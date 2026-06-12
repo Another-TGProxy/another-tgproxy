@@ -42,6 +42,15 @@ int main (string[] args) {
         Path.get_dirname (Path.get_dirname (Station.get_executable_path () ?? "")),
         "Resources");
     localedir = Path.build_filename (mac_res, "locale");
+    // macOS has no PEM trust store (certs live in the keychain), so glib-networking's
+    // GnuTLS backend loads zero CAs and every HTTPS request (the update check) fails
+    // with "Unacceptable TLS certificate". Point it (and the engine's OpenSSL) at the
+    // CA bundle shipped in Resources — GnuTLS and OpenSSL both honor SSL_CERT_FILE.
+    if (Environment.get_variable ("SSL_CERT_FILE") == null) {
+        var ca = Path.build_filename (mac_res, "ssl", "cert.pem");
+        if (FileUtils.test (ca, FileTest.EXISTS))
+            Environment.set_variable ("SSL_CERT_FILE", ca, true);
+    }
 #endif
     // Flatpak: the development profile bakes the build-tree po dir into LOCALEDIR
     // (so `meson devenv` finds catalogs uninstalled), but inside the installed
