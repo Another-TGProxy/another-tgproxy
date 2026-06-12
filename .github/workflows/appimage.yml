@@ -61,7 +61,11 @@ jobs:
           PROFILE=development; APP_ID=space.ampernic.AnotherTGProxy
           [ -n "$RELEASE_VERSION" ] && PROFILE=default || APP_ID="$APP_ID.Devel"
           echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
-          meson setup build --prefix=/usr --buildtype=release -Drelease_version="$VERSION" -Dprofile="$PROFILE"
+          # Only a tagged build pins -Drelease_version; an untagged build keeps
+          # meson's "<ver>-devel" so it's offered the released betas (else it looks
+          # like a final release, newer than every beta, and never updates).
+          RELOPT=""; [ -n "$RELEASE_VERSION" ] && RELOPT="-Drelease_version=$VERSION"
+          meson setup build --prefix=/usr --buildtype=release $RELOPT -Dprofile="$PROFILE"
           DESTDIR="$PWD/AppDir" meson install -C build
 
       - name: Bundle libraries with sharun (incl. glibc + loader)

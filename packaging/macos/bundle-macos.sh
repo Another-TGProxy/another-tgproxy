@@ -71,7 +71,13 @@ rm -rf "$INSTALL"
 # leading "v" stripped) else the meson.build project version.
 APP_VERSION="${RELEASE_VERSION#v}"
 [ -n "$APP_VERSION" ] || APP_VERSION="$(awk -F\' '/version:/{print $2; exit}' meson.build)"
-meson setup build --prefix="$INSTALL" --buildtype=release -Drelease_version="$APP_VERSION" -Dprofile="$PROFILE"
+# Only a tagged build pins -Drelease_version; an untagged build must keep meson's
+# "<ver>-devel" so it reads as a snapshot and is offered the released betas
+# (passing the bare project version here made the app look like a final release,
+# newer than every beta, so the update banner never showed).
+RELOPT=""
+[ -n "${RELEASE_VERSION:-}" ] && RELOPT="-Drelease_version=$APP_VERSION"
+meson setup build --prefix="$INSTALL" --buildtype=release $RELOPT -Dprofile="$PROFILE"
 meson install -C build
 
 # -- 2. .app skeleton ---------------------------------------------------------

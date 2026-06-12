@@ -35,7 +35,10 @@ VERSION="${RELEASE_VERSION#v}"
 # — the .Devel app-id/icon and the striped header so it never looks like a release.
 PROFILE=development; [ -n "${RELEASE_VERSION:-}" ] && PROFILE=default
 export PKG_CONFIG_PATH="$STAGE/lib/pkgconfig:$STAGE/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
-meson setup build --prefix="$STAGE" --buildtype=release -Drelease_version="$VERSION" -Dprofile="$PROFILE"
+# Only a tagged build pins -Drelease_version; an untagged build keeps meson's
+# "<ver>-devel" so it reads as a snapshot and is offered the released betas.
+RELOPT=""; [ -n "${RELEASE_VERSION:-}" ] && RELOPT="-Drelease_version=$VERSION"
+meson setup build --prefix="$STAGE" --buildtype=release $RELOPT -Dprofile="$PROFILE"
 meson install -C build
 
 # -- 2. Portable tree: bin/ (exe + DLLs), lib/, share/ ------------------------
