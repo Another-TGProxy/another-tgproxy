@@ -23,7 +23,13 @@ namespace TgWsProxy {
 
         public Application () {
             Object (
-                application_id: Build.APP_ID,
+                // A development build owns its own bus name (APP_ID_RELEVANT ends
+                // in .Devel) so it coinstalls with the release and, under Flatpak,
+                // the sandbox grants the name (it must equal the manifest app-id).
+                // Resources are compiled at the base path, so pin it explicitly
+                // rather than let GtkApplication derive .../Devel from the id.
+                application_id: Build.APP_ID_RELEVANT,
+                resource_base_path: "/" + Build.APP_ID.replace (".", "/"),
                 flags: ApplicationFlags.DEFAULT_FLAGS
             );
         }

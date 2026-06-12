@@ -39,17 +39,34 @@ jobs:
           STATION_COMMIT=$(sed -n 's/^revision = //p' subprojects/libstation.wrap | head -1)
           QSHUB_COMMIT=$(sed -n 's/^revision = //p' subprojects/quick-settings-hub.wrap | head -1)
           GUI_COMMIT='${{ github.sha }}'
-          if [ "${{ github.ref_type }}" = tag ]; then CHANNEL=stable; else CHANNEL=devel; fi
+          BASE_ID=space.ampernic.AnotherTGProxy
+
+          # A release tag publishes the plain app on the stable channel; any other
+          # (untagged) commit publishes the development build (.Devel app-id +
+          # striped header, coinstallable) on the devel channel.
+          if [ "${{ github.ref_type }}" = tag ]; then
+            TAG='${{ github.ref_name }}'
+            CHANNEL=stable; APP_ID=$BASE_ID
+            VOPT="s|__GUI_VERSION_OPT__|-Drelease_version=${TAG#v}|"
+            POPT="/__GUI_PROFILE_OPT__/d"
+          else
+            CHANNEL=devel; APP_ID=$BASE_ID.Devel
+            VOPT="/__GUI_VERSION_OPT__/d"
+            POPT="s|__GUI_PROFILE_OPT__|-Dprofile=development|"
+          fi
 
           sed -e "s/__CORE_COMMIT__/$CORE_COMMIT/g" \
               -e "s/__GUI_COMMIT__/$GUI_COMMIT/g" \
               -e "s/__STATION_COMMIT__/$STATION_COMMIT/g" \
               -e "s/__QSHUB_COMMIT__/$QSHUB_COMMIT/g" \
-              -e "/__GUI_VERSION_OPT__/d" \
+              -e "s/__APP_ID__/$APP_ID/g" \
+              -e "$VOPT" \
+              -e "$POPT" \
               packaging/flatpak/space.ampernic.AnotherTGProxy.yml > manifest.yml
 
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
-          echo "channel=$CHANNEL  gui=${GUI_COMMIT:0:12}  core=${CORE_COMMIT:0:12}  station=${STATION_COMMIT:0:12}"
+          echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
+          echo "channel=$CHANNEL  app=$APP_ID  gui=${GUI_COMMIT:0:12}  core=${CORE_COMMIT:0:12}  station=${STATION_COMMIT:0:12}"
 
       - name: Dispatch to Ampernic/flatpak
         env:
@@ -61,7 +78,7 @@ jobs:
             exit 0
           fi
           payload=$(jq -n \
-            --arg id  'space.ampernic.AnotherTGProxy' \
+            --arg id  "$APP_ID" \
             --arg ch  "$CHANNEL" \
             --arg m   "$(base64 -w0 manifest.yml)" \
             --arg rt  '49' \

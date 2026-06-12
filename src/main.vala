@@ -91,7 +91,7 @@ int main (string[] args) {
     // GApplication's uniqueness needs a D-Bus session bus, absent on MSYS2/Windows,
     // so guard explicitly: a second launch asks the running app to come forward
     // (present its window, even from the tray) and exits.
-    if (!Station.single_instance_acquire (Build.APP_ID, () => {
+    if (!Station.single_instance_acquire (Build.APP_ID_RELEVANT, () => {
             var running = GLib.Application.get_default ();
             if (running != null) running.activate ();
         })) {

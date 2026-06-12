@@ -3,7 +3,7 @@
 # __*_COMMIT__ placeholders in .github/workflows/publish-flatpak.yml and dispatches
 # it to the Ampernic Flatpak repo. To build locally, substitute the placeholders
 # with concrete commits first (see the README).
-app-id: space.ampernic.AnotherTGProxy
+app-id: __APP_ID__   # base id on a release tag; <id>.Devel on an untagged build
 runtime: org.gnome.Platform
 runtime-version: '49'
 sdk: org.gnome.Sdk
@@ -39,7 +39,8 @@ modules:
     config-opts:
       - --buildtype=release
       - --libdir=lib   # vendored libstation .so lands in /app/lib (on ld's path)
-      - __GUI_VERSION_OPT__   # CI replaces with -Drelease_version=<tag>, or drops it
+      - __GUI_VERSION_OPT__    # CI replaces with -Drelease_version=<tag>, or drops it
+      - __GUI_PROFILE_OPT__    # CI replaces with -Dprofile=development (untagged), or drops it
     sources:
       - type: git
         url: https://github.com/Another-TGProxy/another-tgproxy.git
