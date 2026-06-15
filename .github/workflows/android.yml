@@ -146,6 +146,11 @@ jobs:
           git clone --depth 1 https://github.com/sp1ritCS/gtk-android-builder "$RUNNER_TEMP/pw"
           # Pin the NDK clang target to ANDROID_API (Pixiewood's cross hardcodes 31).
           sed -i "s/+'31-clang/+'${ANDROID_API}-clang/g" "$RUNNER_TEMP/pw/prepare/android.cross"
+          # Make NDK symbols newer than the target weak instead of hard-unavailable,
+          # so gdk-android's runtime-gated API-31/29 calls compile and resolve to NULL
+          # (never called) on older devices. Only gdk-android uses android/*.h symbols.
+          sed -i "s/common_flags = \[\]/common_flags = ['-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__']/" \
+            "$RUNNER_TEMP/pw/prepare/android.cross"
           # Android 8+ (API 26): pin GTK to the commit our gdk-android fallback patches
           # apply against, drop the patches where Pixiewood resolves <patch> entries
           # (pixiewood.xml references them), and lower the gradle minSdk from 31 to 26.
