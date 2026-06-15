@@ -40,6 +40,9 @@
 			<option>-Djson-glib:tests=false</option>
 			<!-- Link libiconv into libglib statically so no extra .so must be bundled. -->
 			<option>-Diconv:default_library=static</option>
+			<!-- gdk-pixbuf's Android ImageDecoder loader needs API 30/31; disable it for
+			     our minSdk-26 build. SVG icons load via the rsvg loader, raster via GTK4. -->
+			<option>-Dgdk-pixbuf:android=disabled</option>
 		</configure-options>
 		<architectures>
 			<arch>aarch64</arch>
