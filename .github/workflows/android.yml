@@ -88,27 +88,31 @@ jobs:
             "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1" >/dev/null
           ls "$ANDROID_HOME/ndk"
 
-      - name: OpenSSL (static, arm64) into the NDK sysroot
+      - name: OpenSSL (static, arm64 + x86_64) into the NDK sysroot
         run: |
           set -eux
           NDK=$(ls -d "$ANDROID_HOME/ndk/"*/ | head -n1)
           TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
           export ANDROID_NDK_ROOT="$NDK"
           export PATH="$TOOLCHAIN/bin:$PATH"
-          git clone --depth 1 -b "$OPENSSL_BRANCH" \
-            https://github.com/openssl/openssl "$RUNNER_TEMP/openssl"
-          cd "$RUNNER_TEMP/openssl"
-          ./Configure android-arm64 "-D__ANDROID_API__=$ANDROID_API" \
-            no-shared no-tests no-apps --prefix="$RUNNER_TEMP/ossl"
-          make -j"$(nproc)" >/dev/null
-          make install_sw >/dev/null
-          # The core's cc.find_library('ssl'/'crypto') searches the cross
-          # compiler's default paths, i.e. the NDK sysroot.
           SYS="$TOOLCHAIN/sysroot/usr"
-          cp -v "$RUNNER_TEMP/ossl/lib/libssl.a" \
-                "$RUNNER_TEMP/ossl/lib/libcrypto.a" \
-                "$SYS/lib/aarch64-linux-android/"
-          cp -rv "$RUNNER_TEMP/ossl/include/openssl" "$SYS/include/"
+          git clone --depth 1 -b "$OPENSSL_BRANCH" \
+            https://github.com/openssl/openssl "$RUNNER_TEMP/openssl-src"
+          # Build for each ABI the app targets; the core's cc.find_library('ssl'/
+          # 'crypto') searches the cross compiler's per-arch sysroot lib dir.
+          for pair in "android-arm64:aarch64-linux-android" "android-x86_64:x86_64-linux-android"; do
+            ot=${pair%%:*}; triple=${pair##*:}
+            cp -r "$RUNNER_TEMP/openssl-src" "$RUNNER_TEMP/ob-$triple"
+            ( cd "$RUNNER_TEMP/ob-$triple"
+              ./Configure "$ot" "-D__ANDROID_API__=$ANDROID_API" \
+                no-shared no-tests no-apps --prefix="$RUNNER_TEMP/ossl-$triple"
+              make -j"$(nproc)" >/dev/null
+              make install_sw >/dev/null )
+            cp -v "$RUNNER_TEMP/ossl-$triple/lib/libssl.a" \
+                  "$RUNNER_TEMP/ossl-$triple/lib/libcrypto.a" \
+                  "$SYS/lib/$triple/"
+          done
+          cp -rv "$RUNNER_TEMP/ossl-aarch64-linux-android/include/openssl" "$SYS/include/"
 
       - name: Current gtk4/libadwaita vapi + typelib for host valac/blueprint
         run: |
