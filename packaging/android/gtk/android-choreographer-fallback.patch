@@ -1,6 +1,6 @@
-From a461a4288d9e81950b444cc28c174f4354471242 Mon Sep 17 00:00:00 2001
+From 03ac8900a17a27395cd6f4c282db2342e610944d Mon Sep 17 00:00:00 2001
 From: Ampernic <ampernic@inbox.ru>
-Date: Mon, 15 Jun 2026 10:22:26 +0300
+Date: Mon, 15 Jun 2026 10:39:53 +0300
 Subject: [PATCH 2/2] gdk/android: fall back to
  AChoreographer_postFrameCallback below API 29
 

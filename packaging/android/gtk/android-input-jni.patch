@@ -1,6 +1,6 @@
-From 5f2eaccb393eb0e07c583c19df860c4b2f04fe13 Mon Sep 17 00:00:00 2001
+From 14847e3b267d4461816ab093afd9eb8fff7323aa Mon Sep 17 00:00:00 2001
 From: Ampernic <ampernic@inbox.ru>
-Date: Mon, 15 Jun 2026 10:22:26 +0300
+Date: Mon, 15 Jun 2026 10:39:53 +0300
 Subject: [PATCH 1/2] gdk/android: read input events via JNI so the backend
  works below API 31
 
@@ -11,22 +11,23 @@ neither build nor run below Android 12 (API 31).
 Wrap the event in a small GdkAndroidInputEvent accessor: on API 31+ it holds
 the native AInputEvent* (used only when android_get_device_api_level() >= 31);
 below 31 it holds the Java MotionEvent/KeyEvent and every field is read via the
-matching JNI method (getX/getAction/..., cached in the refcache). The API-31
-calls are runtime-gated and their unguarded-availability diagnostic is locally
-suppressed; the symbols are weak-imported.
+matching JNI method (cached in the refcache). The API-31 calls are runtime-gated
+and their unguarded-availability diagnostic is locally suppressed; the symbols
+are weak-imported.
 
-Also make the JNI refcache method lookups tolerant: a method absent on the
-running API (e.g. DocumentsContract.isChildDocument) otherwise leaves a pending
-NoSuchMethodError that aborts the process at load. Clear it and leave the id
-NULL instead, so the backend loads on older devices.
+Also make the JNI refcache tolerant of methods/fields absent on the running API:
+a missing one (e.g. DocumentsContract.isChildDocument, or a field that yields a
+NULL fieldID and a "fid == null" JNI fatal) otherwise aborts the process at load.
+Clear the pending exception, skip the field access, and leave the id NULL so the
+backend loads on older devices (the absent feature just stays unavailable).
 ---
  gdk/android/gdkandroidevents-private.h |  29 +++
  gdk/android/gdkandroidevents.c         | 244 +++++++++++++++++++++----
  gdk/android/gdkandroidinit-private.h   |  25 +++
- gdk/android/gdkandroidinit.c           |  27 +++
+ gdk/android/gdkandroidinit.c           |  55 +++++-
  gdk/android/gdkandroidseat-private.h   |   6 +-
  gdk/android/gdkandroidseat.c           |  12 +-
- 6 files changed, 295 insertions(+), 48 deletions(-)
+ 6 files changed, 313 insertions(+), 58 deletions(-)
 
 diff --git a/gdk/android/gdkandroidevents-private.h b/gdk/android/gdkandroidevents-private.h
 index c685b1a..39e2963 100644
@@ -516,10 +517,10 @@ index e76dfd6..2199f5e 100644
      jclass klass;
      jmethodID get_device_from_id;
 diff --git a/gdk/android/gdkandroidinit.c b/gdk/android/gdkandroidinit.c
-index e2ed7f8..647d039 100644
+index e2ed7f8..f37e355 100644
 --- a/gdk/android/gdkandroidinit.c
 +++ b/gdk/android/gdkandroidinit.c
-@@ -107,9 +107,11 @@ static GdkAndroidJavaCache gdk_android_java_cache;
+@@ -107,27 +107,37 @@ static GdkAndroidJavaCache gdk_android_java_cache;
  
  #define POPULATE_REFCACHE_METHOD(cklass, cname, jname, signature) {                                                         \
      gdk_android_java_cache.cklass.cname = (*env)->GetMethodID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
@@ -531,7 +532,43 @@ index e2ed7f8..647d039 100644
    }
  #define POPULATE_REFCACHE_MEMBER(cklass, cname, jname, signature) {                                                        \
      gdk_android_java_cache.cklass.cname = (*env)->GetFieldID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
-@@ -520,6 +522,29 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
++    if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env);                                                       \
+   }
+-#define POPULATE_REFCACHE_FIELD(cklass, cname, jname) {                                                                           \
+-    jfieldID cklass##_##cname = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, "I");                  \
+-    gdk_android_java_cache.cklass.cname = (*env)->GetStaticIntField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname); \
++#define POPULATE_REFCACHE_FIELD(cklass, cname, jname) {                                                                                 \
++    jfieldID cklass##_##cname = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, "I");                        \
++    if ((*env)->ExceptionCheck (env)) { (*env)->ExceptionClear (env); gdk_android_java_cache.cklass.cname = 0; }                        \
++    else gdk_android_java_cache.cklass.cname = (*env)->GetStaticIntField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname);  \
+   }
+-#define POPULATE_REFCACHE_ENUM(cklass, cname, jname, signature) {                                                              \
+-    jfieldID cklass##_##cname##_id = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, signature);    \
+-    jobject cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id); \
+-    gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                        \
+-    (*env)->DeleteLocalRef (env, cklass##_##cname);                                                                            \
++#define POPULATE_REFCACHE_ENUM(cklass, cname, jname, signature) {                                                                \
++    jfieldID cklass##_##cname##_id = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, signature);      \
++    if ((*env)->ExceptionCheck (env)) { (*env)->ExceptionClear (env); gdk_android_java_cache.cklass.cname = NULL; }              \
++    else {                                                                                                                       \
++      jobject cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id); \
++      gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                       \
++      (*env)->DeleteLocalRef (env, cklass##_##cname);                                                                           \
++    }                                                                                                                          \
+   }
+ #define POPULATE_REFCACHE_STRING(cklass, cname, jname) {                                                                               \
+     jfieldID cklass##_##cname##_id = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, "Ljava/lang/String;"); \
+-    jstring cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id);         \
+-    gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                                \
++    if ((*env)->ExceptionCheck (env)) { (*env)->ExceptionClear (env); gdk_android_java_cache.cklass.cname = NULL; }                    \
++    else {                                                                                                                            \
++      jstring cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id);       \
++      gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                             \
++    }                                                                                                                                 \
+ }
+ 
+ #define POPULATE_REFCACHE_CURSOR_TYPE(cname, jname, cssname) {                                                                                                    \
+@@ -520,6 +530,29 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
    jclass android_input_event = (*env)->FindClass (env, "android/view/InputEvent");
    gdk_android_java_cache.a_input_event.klass = (*env)->NewGlobalRef (env, android_input_event);
    POPULATE_REFCACHE_METHOD (a_input_event, get_device, "getDevice", "()Landroid/view/InputDevice;")
@@ -561,7 +598,7 @@ index e2ed7f8..647d039 100644
  
    jclass android_input_device = (*env)->FindClass (env, "android/view/InputDevice");
    gdk_android_java_cache.a_input_device.klass = (*env)->NewGlobalRef (env, android_input_device);
-@@ -715,6 +740,8 @@ gdk_android_finalize (void)
+@@ -715,6 +748,8 @@ gdk_android_finalize (void)
    (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_rect.klass);
    (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_rectf.klass);
    (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_input_event.klass);
