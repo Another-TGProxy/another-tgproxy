@@ -19,7 +19,14 @@
 			<patch>hack</patch>
 		</glib>
 		<fontconfig/>
-		<gtk/>
+		<gtk>
+			<!-- Make gdk-android run on Android 8+ (API 26): the backend hard-calls
+			     API-31 input and API-29 choreographer NDK functions; these patches add
+			     pre-31/pre-29 fallbacks. gtk.wrap is pinned (in android.yml) to the
+			     commit they apply against. -->
+			<patch>android-input-jni</patch>
+			<patch>android-choreographer-fallback</patch>
+		</gtk>
 		<libadwaita/>
 	</dependencies>
 	<build target="another-tgproxy">

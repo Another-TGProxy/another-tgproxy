@@ -32,12 +32,13 @@ permissions:
 
 env:
   OPENSSL_BRANCH: openssl-3.3
-  # NDK target = the app's minSdk (Pixiewood's gradle is minSdk 31, and GTK's
-  # gdk-android needs API 31: AMotionEvent_fromJava & co. are __INTRODUCED_IN(31)).
-  # Do NOT raise this: a higher target makes glib hard-link API-34 symbols
-  # (close_range, copy_file_range) that are absent on API-31 devices, so the app
-  # fails to dlopen libglib-2.0.so at launch ("cannot locate symbol close_range").
-  ANDROID_API: '31'
+  # NDK target = the app's minSdk. We support Android 8.0 (API 26): the gdk-android
+  # patches (packaging/android/gtk/, applied via pixiewood.xml) add pre-31 input and
+  # pre-29 choreographer fallbacks, and glib detects API-34 symbols (close_range,
+  # copy_file_range) as unavailable at this target and uses its fallbacks. Do NOT
+  # raise this above the minSdk, or those symbols get hard-linked and the app fails
+  # to dlopen on older devices ("cannot locate symbol close_range").
+  ANDROID_API: '26'
 
 jobs:
   app-apk:
@@ -143,11 +144,17 @@ jobs:
         run: |
           git clone --depth 1 -b android-apk https://github.com/sp1ritCS/meson "$RUNNER_TEMP/meson"
           git clone --depth 1 https://github.com/sp1ritCS/gtk-android-builder "$RUNNER_TEMP/pw"
-          # Pin the NDK clang target to ANDROID_API. Pixiewood's cross hardcodes 31,
-          # which already matches our floor (gdk-android's API-31 input bridge); the
-          # sed just keeps it driven by the env knob. Keep it at 31 — see the note on
-          # ANDROID_API above for why a higher target breaks API-31 devices.
+          # Pin the NDK clang target to ANDROID_API (Pixiewood's cross hardcodes 31).
           sed -i "s/+'31-clang/+'${ANDROID_API}-clang/g" "$RUNNER_TEMP/pw/prepare/android.cross"
+          # Android 8+ (API 26): pin GTK to the commit our gdk-android fallback patches
+          # apply against, drop the patches where Pixiewood resolves <patch> entries
+          # (pixiewood.xml references them), and lower the gradle minSdk from 31 to 26.
+          sed -i 's|^revision = main|revision = 33f9bc7bc5653e9214226e44758ae74967d8c0b6|' \
+            "$RUNNER_TEMP/pw/prepare/wraps/gtk/gtk.wrap"
+          cp packaging/android/gtk/android-input-jni.patch \
+             packaging/android/gtk/android-choreographer-fallback.patch \
+             "$RUNNER_TEMP/pw/prepare/wraps/gtk/"
+          sed -i 's/minSdk 31/minSdk 26/' "$RUNNER_TEMP/pw/generate/gradle.xsl"
           # Pixiewood installs only --tags runtime; meson tags .mo catalogs 'i18n',
           # so translations would be dropped. Include them.
           sed -i 's/"--tags", "runtime")/"--tags", "runtime,i18n")/' "$RUNNER_TEMP/pw/pixiewood"

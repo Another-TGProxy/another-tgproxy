@@ -1,0 +1,612 @@
+From 844960c9bb0cb018efe643868b95c6b49a60906b Mon Sep 17 00:00:00 2001
+From: Ampernic <ampernic@inbox.ru>
+Date: Mon, 15 Jun 2026 08:19:21 +0300
+Subject: [PATCH 1/2] gdk/android: read input events via JNI so the backend
+ works below API 31
+
+AMotionEvent_fromJava, AKeyEvent_fromJava and AInputEvent_release are
+__INTRODUCED_IN(31) and were called unconditionally, so gdk-android could
+neither build nor run below Android 12 (API 31).
+
+Wrap the event in a small GdkAndroidInputEvent accessor: on API 31+ it
+holds the native AInputEvent* (obtained under __builtin_available); below
+31 it holds the Java MotionEvent/KeyEvent and every field is read through
+the matching JNI method (getX/getAction/..., cached in the refcache). The
+AInputEvent_* getters are baseline (API 9-14) and stay in use on the
+native path, so API 31+ behaviour is unchanged. Time accessors normalise
+to nanoseconds (the Java methods return milliseconds) so the call sites
+are untouched.
+---
+ gdk/android/gdkandroidevents-private.h |  29 ++++
+ gdk/android/gdkandroidevents.c         | 226 ++++++++++++++++++++-----
+ gdk/android/gdkandroidinit-private.h   |  25 +++
+ gdk/android/gdkandroidinit.c           |  25 +++
+ gdk/android/gdkandroidseat-private.h   |   6 +-
+ gdk/android/gdkandroidseat.c           |  12 +-
+ 6 files changed, 276 insertions(+), 47 deletions(-)
+
+diff --git a/gdk/android/gdkandroidevents-private.h b/gdk/android/gdkandroidevents-private.h
+index c685b1a..39e2963 100644
+--- a/gdk/android/gdkandroidevents-private.h
++++ b/gdk/android/gdkandroidevents-private.h
+@@ -19,10 +19,39 @@
+ 
+ #pragma once
+ 
++#include <android/input.h>
++
+ #include "gdkandroidsurface-private.h"
+ 
+ G_BEGIN_DECLS
+ 
++typedef struct
++{
++  const AInputEvent *native;  /* non-NULL only on API >= 31 (from *_fromJava) */
++  JNIEnv            *env;
++  jobject            jevent;  /* the Java MotionEvent / KeyEvent */
++} GdkAndroidInputEvent;
++
++gint32 gdk_android_input_get_source (const GdkAndroidInputEvent *e);
++gint32 gdk_android_input_get_device_id (const GdkAndroidInputEvent *e);
++
++gint32 gdk_android_motion_get_action (const GdkAndroidInputEvent *e);
++gint32 gdk_android_motion_get_meta_state (const GdkAndroidInputEvent *e);
++size_t gdk_android_motion_get_pointer_count (const GdkAndroidInputEvent *e);
++gint32 gdk_android_motion_get_pointer_id (const GdkAndroidInputEvent *e, size_t pointer_index);
++gfloat gdk_android_motion_get_x (const GdkAndroidInputEvent *e, size_t pointer_index);
++gfloat gdk_android_motion_get_y (const GdkAndroidInputEvent *e, size_t pointer_index);
++gint32 gdk_android_motion_get_tool_type (const GdkAndroidInputEvent *e, size_t pointer_index);
++gint32 gdk_android_motion_get_button_state (const GdkAndroidInputEvent *e);
++gfloat gdk_android_motion_get_axis_value (const GdkAndroidInputEvent *e, gint32 axis, size_t pointer_index);
++gint64 gdk_android_motion_get_event_time_ns (const GdkAndroidInputEvent *e);
++gint64 gdk_android_motion_get_down_time_ns (const GdkAndroidInputEvent *e);
++
++gint32 gdk_android_key_get_action (const GdkAndroidInputEvent *e);
++gint32 gdk_android_key_get_meta_state (const GdkAndroidInputEvent *e);
++gint32 gdk_android_key_get_key_code (const GdkAndroidInputEvent *e);
++gint64 gdk_android_key_get_event_time_ns (const GdkAndroidInputEvent *e);
++
+ void gdk_android_events_handle_motion_event (GdkAndroidSurface *surface, jobject motion_event, jint event_identifier);
+ void gdk_android_events_handle_key_event (GdkAndroidSurface *surface, jobject key_event);
+ 
+diff --git a/gdk/android/gdkandroidevents.c b/gdk/android/gdkandroidevents.c
+index deab53c..01b78a0 100644
+--- a/gdk/android/gdkandroidevents.c
++++ b/gdk/android/gdkandroidevents.c
+@@ -30,6 +30,142 @@
+ 
+ #include "gdkandroidevents-private.h"
+ 
++gint32
++gdk_android_input_get_source (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AInputEvent_getSource (e->native);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_input_event.get_source);
++}
++
++gint32
++gdk_android_input_get_device_id (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AInputEvent_getDeviceId (e->native);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_input_event.get_device_id);
++}
++
++gint32
++gdk_android_motion_get_action (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AMotionEvent_getAction (e->native);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_action);
++}
++
++gint32
++gdk_android_motion_get_meta_state (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AMotionEvent_getMetaState (e->native);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_meta_state);
++}
++
++size_t
++gdk_android_motion_get_pointer_count (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AMotionEvent_getPointerCount (e->native);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_pointer_count);
++}
++
++gint32
++gdk_android_motion_get_pointer_id (const GdkAndroidInputEvent *e, size_t pointer_index)
++{
++  if (e->native)
++    return AMotionEvent_getPointerId (e->native, pointer_index);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_pointer_id, (jint) pointer_index);
++}
++
++gfloat
++gdk_android_motion_get_x (const GdkAndroidInputEvent *e, size_t pointer_index)
++{
++  if (e->native)
++    return AMotionEvent_getX (e->native, pointer_index);
++  return (*e->env)->CallFloatMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_x, (jint) pointer_index);
++}
++
++gfloat
++gdk_android_motion_get_y (const GdkAndroidInputEvent *e, size_t pointer_index)
++{
++  if (e->native)
++    return AMotionEvent_getY (e->native, pointer_index);
++  return (*e->env)->CallFloatMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_y, (jint) pointer_index);
++}
++
++gint32
++gdk_android_motion_get_tool_type (const GdkAndroidInputEvent *e, size_t pointer_index)
++{
++  if (e->native)
++    return AMotionEvent_getToolType (e->native, pointer_index);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_tool_type, (jint) pointer_index);
++}
++
++gint32
++gdk_android_motion_get_button_state (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AMotionEvent_getButtonState (e->native);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_button_state);
++}
++
++gfloat
++gdk_android_motion_get_axis_value (const GdkAndroidInputEvent *e, gint32 axis, size_t pointer_index)
++{
++  if (e->native)
++    return AMotionEvent_getAxisValue (e->native, axis, pointer_index);
++  return (*e->env)->CallFloatMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_axis_value, (jint) axis, (jint) pointer_index);
++}
++
++gint64
++gdk_android_motion_get_event_time_ns (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AMotionEvent_getEventTime (e->native);
++  return (*e->env)->CallLongMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_event_time) * 1000000 /* ms to ns */;
++}
++
++gint64
++gdk_android_motion_get_down_time_ns (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AMotionEvent_getDownTime (e->native);
++  return (*e->env)->CallLongMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_motion_event.get_down_time) * 1000000 /* ms to ns */;
++}
++
++gint32
++gdk_android_key_get_action (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AKeyEvent_getAction (e->native);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_key_event.get_action);
++}
++
++gint32
++gdk_android_key_get_meta_state (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AKeyEvent_getMetaState (e->native);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_key_event.get_meta_state);
++}
++
++gint32
++gdk_android_key_get_key_code (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AKeyEvent_getKeyCode (e->native);
++  return (*e->env)->CallIntMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_key_event.get_key_code);
++}
++
++gint64
++gdk_android_key_get_event_time_ns (const GdkAndroidInputEvent *e)
++{
++  if (e->native)
++    return AKeyEvent_getEventTime (e->native);
++  return (*e->env)->CallLongMethod (e->env, e->jevent, gdk_android_get_java_cache ()->a_key_event.get_event_time) * 1000000 /* ms to ns */;
++}
++
+ static GdkModifierType
+ gdk_android_events_meta_to_gdk (gint32 modifiers)
+ {
+@@ -86,9 +222,9 @@ gdk_android_events_int_hash (guint32 num)
+ 
+ #define GDK_ANDROID_TOUCH_EVENT_TYPE_MASK (3) // least significant 2 bits
+ static GdkEventType
+-gdk_android_events_touch_action_to_gdk (const AInputEvent *event, size_t pointer_index)
++gdk_android_events_touch_action_to_gdk (const GdkAndroidInputEvent *event, size_t pointer_index)
+ {
+-  gint32 action = AMotionEvent_getAction (event);
++  gint32 action = gdk_android_motion_get_action (event);
+   gint32 masked_action = action & AMOTION_EVENT_ACTION_MASK;
+   if (masked_action == AMOTION_EVENT_ACTION_POINTER_DOWN ||
+       masked_action == AMOTION_EVENT_ACTION_POINTER_UP)
+@@ -128,13 +264,13 @@ gdk_android_events_touch_action_to_gdk (const AInputEvent *event, size_t pointer
+ static void
+ gdk_android_events_emit_button_press (gint32 mask, guint32 state, guint button,
+                                       GdkAndroidSurface *surface,
+-                                      const AInputEvent *event, GdkDevice *dev,
++                                      const GdkAndroidInputEvent *event, GdkDevice *dev,
+                                       guint32 time, GdkModifierType mods,
+                                       gdouble x, gdouble y)
+ {
+   GdkDisplay *display = gdk_surface_get_display ((GdkSurface *) surface);
+   GdkDeviceTool *tool = gdk_android_seat_get_device_tool (GDK_ANDROID_DISPLAY (display)->seat,
+-                                                          AMotionEvent_getToolType (event, 0));
++                                                          gdk_android_motion_get_tool_type (event, 0));
+   g_debug ("Mouse %u event: (%d & %d) %p [%s]: %s", button, mask, state, surface, G_OBJECT_TYPE_NAME (surface), (state & mask) != 0 ? "press" : "release");
+   GdkEvent *ev = gdk_button_event_new ((state & mask) != 0 ? GDK_BUTTON_PRESS : GDK_BUTTON_RELEASE,
+                                        (GdkSurface *) surface, dev, tool,
+@@ -153,18 +289,20 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+   GdkAndroidDisplay *display = (GdkAndroidDisplay *) gdk_surface_get_display ((GdkSurface *) surface);
+ 
+   JNIEnv *env = gdk_android_get_env ();
+-  const AInputEvent *event = AMotionEvent_fromJava (env, motion_event);
++  GdkAndroidInputEvent e = { .native = NULL, .env = env, .jevent = motion_event };
++  if (__builtin_available (android 31, *))
++    e.native = AMotionEvent_fromJava (env, motion_event);
+ 
+-  gint32 masked_action = AMotionEvent_getAction (event) & AMOTION_EVENT_ACTION_MASK;
+-  gint32 src = AInputEvent_getSource (event);
++  gint32 masked_action = gdk_android_motion_get_action (&e) & AMOTION_EVENT_ACTION_MASK;
++  gint32 src = gdk_android_input_get_source (&e);
+ 
+   GdkDevice *dev = gdk_seat_get_pointer ((GdkSeat *) display->seat);
+   GdkAndroidDevice *dev_impl = GDK_ANDROID_DEVICE (dev);
+ 
+-  GdkModifierType mods = gdk_android_events_meta_to_gdk (AMotionEvent_getMetaState (event));
++  GdkModifierType mods = gdk_android_events_meta_to_gdk (gdk_android_motion_get_meta_state (&e));
+   mods |= gdk_android_events_buttons_to_gdkmods (dev_impl->button_state);
+ 
+-  gint64 time = AMotionEvent_getEventTime (event) / 1000000 /* ns to ms */;
++  gint64 time = gdk_android_motion_get_event_time_ns (&e) / 1000000 /* ns to ms */;
+ 
+   // Update keyboard focus on motion events only for autohide surfaces
+   // This *doesn't really* match the behaviour of Mutter (autohide popups
+@@ -180,37 +318,37 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+   if (GDK_ANDROID_EVENTS_COMPARE_MASK (src, AINPUT_SOURCE_TOUCHSCREEN))
+     {
+       // I think it might be better to drop the down time and only rely on the event identity
+-      guint base_sequence = gdk_android_surface_long_hash ((guint64) AMotionEvent_getDownTime (event));
++      guint base_sequence = gdk_android_surface_long_hash ((guint64) gdk_android_motion_get_down_time_ns (&e));
+       base_sequence ^= (guint) event_identifier;
+ 
+-      size_t pointers = AMotionEvent_getPointerCount (event);
++      size_t pointers = gdk_android_motion_get_pointer_count (&e);
+       for (size_t i = 0; i < pointers; i++)
+         {
+-          GdkEventType ev_type = gdk_android_events_touch_action_to_gdk (event, i);
++          GdkEventType ev_type = gdk_android_events_touch_action_to_gdk (&e, i);
+ 
+-          guint sequence = base_sequence ^ gdk_android_events_int_hash(AMotionEvent_getPointerId (event, i));
+-          gfloat x = AMotionEvent_getX (event, i) / surface->cfg.scale;
+-          gfloat y = AMotionEvent_getY (event, i) / surface->cfg.scale;
++          guint sequence = base_sequence ^ gdk_android_events_int_hash(gdk_android_motion_get_pointer_id (&e, i));
++          gfloat x = gdk_android_motion_get_x (&e, i) / surface->cfg.scale;
++          gfloat y = gdk_android_motion_get_y (&e, i) / surface->cfg.scale;
+ 
+           GdkEvent *ev = gdk_touch_event_new (ev_type, GUINT_TO_POINTER (sequence), (GdkSurface *) surface,
+                                               display->seat->logical_touchscreen,
+                                               time, mods,
+                                               x, y,
+-                                              gdk_android_seat_create_axes_from_motion_event (event, i), i == 0);
++                                              gdk_android_seat_create_axes_from_motion_event (&e, i), i == 0);
+           gdk_android_seat_consume_event ((GdkDisplay *) display, ev);
+         }
+     }
+   else if (GDK_ANDROID_EVENTS_COMPARE_MASK (src, AINPUT_SOURCE_CLASS_POINTER))
+     {
+-      gfloat x = AMotionEvent_getX (event, 0) / surface->cfg.scale;
+-      gfloat y = AMotionEvent_getY (event, 0) / surface->cfg.scale;
++      gfloat x = gdk_android_motion_get_x (&e, 0) / surface->cfg.scale;
++      gfloat y = gdk_android_motion_get_y (&e, 0) / surface->cfg.scale;
+ 
+       if (masked_action == AMOTION_EVENT_ACTION_SCROLL)
+         {
+           GdkEvent *ev = gdk_scroll_event_new ((GdkSurface *) surface, dev, NULL,
+                                                time, mods,
+-                                               AMotionEvent_getAxisValue (event, AMOTION_EVENT_AXIS_HSCROLL, 0),
+-                                               AMotionEvent_getAxisValue (event, AMOTION_EVENT_AXIS_VSCROLL, 0),
++                                               gdk_android_motion_get_axis_value (&e, AMOTION_EVENT_AXIS_HSCROLL, 0),
++                                               gdk_android_motion_get_axis_value (&e, AMOTION_EVENT_AXIS_VSCROLL, 0),
+                                                FALSE, // how am I supposed to know if the current scroll event is the last?
+                                                GDK_SCROLL_UNIT_WHEEL,
+                                                GDK_SCROLL_RELATIVE_DIRECTION_UNKNOWN);
+@@ -223,26 +361,26 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+           // button up event, as GDK does not
+           // provide a cancel mechanism for
+           // button events.
+-          gint32 tool_type = AMotionEvent_getToolType (event, 0);
++          gint32 tool_type = gdk_android_motion_get_tool_type (&e, 0);
+           if (tool_type == AMOTION_EVENT_TOOL_TYPE_MOUSE || tool_type == AMOTION_EVENT_TOOL_TYPE_FINGER)
+             {
+-              gint32 button_state = AMotionEvent_getButtonState (event);
++              gint32 button_state = gdk_android_motion_get_button_state (&e);
+               if (GDK_ANDROID_EVENTS_BUTTON_IS_DIFFERENT (button_state, dev_impl->button_state, AMOTION_EVENT_BUTTON_PRIMARY))
+                 gdk_android_events_emit_button_press (AMOTION_EVENT_BUTTON_PRIMARY, button_state,
+                                                       GDK_BUTTON_PRIMARY,
+-                                                      surface, event, dev,
++                                                      surface, &e, dev,
+                                                       time, mods,
+                                                       x, y);
+               if (GDK_ANDROID_EVENTS_BUTTON_IS_DIFFERENT (button_state, dev_impl->button_state, AMOTION_EVENT_BUTTON_SECONDARY))
+                 gdk_android_events_emit_button_press (AMOTION_EVENT_BUTTON_SECONDARY, button_state,
+                                                       GDK_BUTTON_SECONDARY,
+-                                                      surface, event, dev,
++                                                      surface, &e, dev,
+                                                       time, mods,
+                                                       x, y);
+               if (GDK_ANDROID_EVENTS_BUTTON_IS_DIFFERENT (button_state, dev_impl->button_state, AMOTION_EVENT_BUTTON_TERTIARY))
+                 gdk_android_events_emit_button_press (AMOTION_EVENT_BUTTON_TERTIARY, button_state,
+                                                       GDK_BUTTON_MIDDLE,
+-                                                      surface, event, dev,
++                                                      surface, &e, dev,
+                                                       time, mods,
+                                                       x, y);
+ 
+@@ -257,7 +395,7 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+                                                    time, mods,
+                                                    GDK_BUTTON_PRIMARY,
+                                                    x, y,
+-                                                   gdk_android_seat_create_axes_from_motion_event (event, 0));
++                                                   gdk_android_seat_create_axes_from_motion_event (&e, 0));
+               gdk_android_seat_consume_event ((GdkDisplay *) display, ev);
+ 
+               // this will cause conflicts in cases where the mouse/touchpad and
+@@ -291,28 +429,28 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+                masked_action == AMOTION_EVENT_ACTION_HOVER_MOVE)
+         {
+           GdkDeviceTool *tool = gdk_android_seat_get_device_tool (display->seat,
+-                                                                  AMotionEvent_getToolType (event, 0));
++                                                                  gdk_android_motion_get_tool_type (&e, 0));
+           GdkEvent *ev = gdk_motion_event_new ((GdkSurface *) surface, dev, tool,
+                                                time, mods,
+                                                x, y,
+-                                               gdk_android_seat_create_axes_from_motion_event (event, 0));
++                                               gdk_android_seat_create_axes_from_motion_event (&e, 0));
+           gdk_android_seat_consume_event ((GdkDisplay *) display, ev);
+ 
+           // as changes in BUTTON_STYLUS_{PRIMARY,SECONDARY} do not emit a special
+           // event, we'll have to check for changes during move events. This should
+           // be fine, given that it's quite hard if not impossible (depending on the
+           // tablet) to press a stylus button without causing a move event.
+-          gint32 button_state = AMotionEvent_getButtonState (event);
++          gint32 button_state = gdk_android_motion_get_button_state (&e);
+           if (GDK_ANDROID_EVENTS_BUTTON_IS_DIFFERENT (button_state, dev_impl->button_state, AMOTION_EVENT_BUTTON_STYLUS_PRIMARY))
+             gdk_android_events_emit_button_press (AMOTION_EVENT_BUTTON_STYLUS_PRIMARY, button_state,
+                                                   GDK_BUTTON_MIDDLE,
+-                                                  surface, event, dev,
++                                                  surface, &e, dev,
+                                                   time, mods,
+                                                   x, y);
+           if (GDK_ANDROID_EVENTS_BUTTON_IS_DIFFERENT (button_state, dev_impl->button_state, AMOTION_EVENT_BUTTON_STYLUS_SECONDARY))
+             gdk_android_events_emit_button_press (AMOTION_EVENT_BUTTON_STYLUS_SECONDARY, button_state,
+                                                   GDK_BUTTON_SECONDARY,
+-                                                  surface, event, dev,
++                                                  surface, &e, dev,
+                                                   time, mods,
+                                                   x, y);
+           const guint update_mask = AMOTION_EVENT_BUTTON_STYLUS_PRIMARY | AMOTION_EVENT_BUTTON_STYLUS_SECONDARY;
+@@ -355,7 +493,7 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+       for (gsize i = 0; i < G_N_ELEMENTS (pad_axes); i++)
+         {
+           gdouble value;
+-          if (gdk_android_seat_normalize_range (env, jdevice, event, 0, pad_axes[i].axis, pad_axes[i].min, pad_axes[i].max, &value) && value != 0.)
++          if (gdk_android_seat_normalize_range (env, jdevice, &e, 0, pad_axes[i].axis, pad_axes[i].min, pad_axes[i].max, &value) && value != 0.)
+             { // the value != 0. check is less than ideal, as 0 is a legitimate value, but
+               // android also returns 0 when the finger leaves the ring (and often just
+               // randomly too)
+@@ -369,7 +507,11 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+       (*env)->PopLocalFrame (env, NULL);
+     }
+ 
+-  AInputEvent_release (event);
++  if (e.native)
++    {
++      if (__builtin_available (android 31, *))
++        AInputEvent_release (e.native);
++    }
+ }
+ 
+ void
+@@ -379,9 +521,11 @@ gdk_android_events_handle_key_event (GdkAndroidSurface *surface,
+   GdkAndroidDisplay *display = (GdkAndroidDisplay *) gdk_surface_get_display ((GdkSurface *) surface);
+ 
+   JNIEnv *env = gdk_android_get_env ();
+-  const AInputEvent *event = AKeyEvent_fromJava (env, key_event);
++  GdkAndroidInputEvent e = { .native = NULL, .env = env, .jevent = key_event };
++  if (__builtin_available (android 31, *))
++    e.native = AKeyEvent_fromJava (env, key_event);
+ 
+-  gint32 action = AKeyEvent_getAction (event);
++  gint32 action = gdk_android_key_get_action (&e);
+   // The AKeyState enum values UP and DOWN are actually inversed
+   // when the key is depressed the keystate is 0 (UP), while the
+   // keystate becomes 1 (DOWN) once the key was released again.
+@@ -390,12 +534,12 @@ gdk_android_events_handle_key_event (GdkAndroidSurface *surface,
+   GdkDevice *dev = gdk_seat_get_keyboard ((GdkSeat *) display->seat);
+   gdk_android_device_keyboard_maybe_update_surface_focus ((GdkAndroidDevice *) dev, surface);
+ 
+-  GdkModifierType mods = gdk_android_events_meta_to_gdk (AKeyEvent_getMetaState (event));
++  GdkModifierType mods = gdk_android_events_meta_to_gdk (gdk_android_key_get_meta_state (&e));
+   mods |= gdk_android_events_buttons_to_gdkmods (((GdkAndroidDevice *) display->seat->logical_pointer)->button_state);
+ 
+-  gint64 time = AKeyEvent_getEventTime (event) / 1000000 /* ns to ms */;
++  gint64 time = gdk_android_key_get_event_time_ns (&e) / 1000000 /* ns to ms */;
+ 
+-  gint32 keycode = AKeyEvent_getKeyCode (event);
++  gint32 keycode = gdk_android_key_get_key_code (&e);
+ 
+   if (keycode >= AKEYCODE_BUTTON_1 && keycode <= AKEYCODE_BUTTON_16)
+     {
+@@ -423,5 +567,9 @@ gdk_android_events_handle_key_event (GdkAndroidSurface *surface,
+                                     &translated, &translated, NULL);
+   gdk_android_seat_consume_event ((GdkDisplay *) display, ev);
+ cleanup:
+-  AInputEvent_release (event);
++  if (e.native)
++    {
++      if (__builtin_available (android 31, *))
++        AInputEvent_release (e.native);
++    }
+ }
+diff --git a/gdk/android/gdkandroidinit-private.h b/gdk/android/gdkandroidinit-private.h
+index e76dfd6..2199f5e 100644
+--- a/gdk/android/gdkandroidinit-private.h
++++ b/gdk/android/gdkandroidinit-private.h
+@@ -361,8 +361,33 @@ typedef struct
+   {
+     jclass klass;
+     jmethodID get_device;
++    jmethodID get_source;
++    jmethodID get_device_id;
+   } a_input_event;
+   struct
++  {
++    jclass klass;
++    jmethodID get_action;
++    jmethodID get_pointer_count;
++    jmethodID get_pointer_id;
++    jmethodID get_x;
++    jmethodID get_y;
++    jmethodID get_tool_type;
++    jmethodID get_button_state;
++    jmethodID get_meta_state;
++    jmethodID get_event_time;
++    jmethodID get_down_time;
++    jmethodID get_axis_value;
++  } a_motion_event;
++  struct
++  {
++    jclass klass;
++    jmethodID get_action;
++    jmethodID get_meta_state;
++    jmethodID get_key_code;
++    jmethodID get_event_time;
++  } a_key_event;
++  struct
+   {
+     jclass klass;
+     jmethodID get_device_from_id;
+diff --git a/gdk/android/gdkandroidinit.c b/gdk/android/gdkandroidinit.c
+index e2ed7f8..6d6a7b8 100644
+--- a/gdk/android/gdkandroidinit.c
++++ b/gdk/android/gdkandroidinit.c
+@@ -520,6 +520,29 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   jclass android_input_event = (*env)->FindClass (env, "android/view/InputEvent");
+   gdk_android_java_cache.a_input_event.klass = (*env)->NewGlobalRef (env, android_input_event);
+   POPULATE_REFCACHE_METHOD (a_input_event, get_device, "getDevice", "()Landroid/view/InputDevice;")
++  POPULATE_REFCACHE_METHOD (a_input_event, get_source, "getSource", "()I")
++  POPULATE_REFCACHE_METHOD (a_input_event, get_device_id, "getDeviceId", "()I")
++
++  jclass android_motion_event = (*env)->FindClass (env, "android/view/MotionEvent");
++  gdk_android_java_cache.a_motion_event.klass = (*env)->NewGlobalRef (env, android_motion_event);
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_action, "getAction", "()I")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_pointer_count, "getPointerCount", "()I")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_pointer_id, "getPointerId", "(I)I")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_x, "getX", "(I)F")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_y, "getY", "(I)F")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_tool_type, "getToolType", "(I)I")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_button_state, "getButtonState", "()I")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_meta_state, "getMetaState", "()I")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_event_time, "getEventTime", "()J")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_down_time, "getDownTime", "()J")
++  POPULATE_REFCACHE_METHOD (a_motion_event, get_axis_value, "getAxisValue", "(II)F")
++
++  jclass android_key_event = (*env)->FindClass (env, "android/view/KeyEvent");
++  gdk_android_java_cache.a_key_event.klass = (*env)->NewGlobalRef (env, android_key_event);
++  POPULATE_REFCACHE_METHOD (a_key_event, get_action, "getAction", "()I")
++  POPULATE_REFCACHE_METHOD (a_key_event, get_meta_state, "getMetaState", "()I")
++  POPULATE_REFCACHE_METHOD (a_key_event, get_key_code, "getKeyCode", "()I")
++  POPULATE_REFCACHE_METHOD (a_key_event, get_event_time, "getEventTime", "()J")
+ 
+   jclass android_input_device = (*env)->FindClass (env, "android/view/InputDevice");
+   gdk_android_java_cache.a_input_device.klass = (*env)->NewGlobalRef (env, android_input_device);
+@@ -715,6 +738,8 @@ gdk_android_finalize (void)
+   (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_rect.klass);
+   (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_rectf.klass);
+   (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_input_event.klass);
++  (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_motion_event.klass);
++  (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_key_event.klass);
+   (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_input_device.klass);
+   (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_motion_range.klass);
+   (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_drag_event.klass);
+diff --git a/gdk/android/gdkandroidseat-private.h b/gdk/android/gdkandroidseat-private.h
+index 6c9127d..aeccfc7 100644
+--- a/gdk/android/gdkandroidseat-private.h
++++ b/gdk/android/gdkandroidseat-private.h
+@@ -25,6 +25,8 @@
+ 
+ #include "gdkandroidsurface-private.h"
+ 
++#include "gdkandroidevents-private.h"
++
+ #include "gdkandroidseat.h"
+ 
+ G_BEGIN_DECLS
+@@ -54,8 +56,8 @@ GdkAndroidSeat *gdk_android_seat_new (GdkDisplay *display);
+ 
+ GdkDeviceTool *gdk_android_seat_get_device_tool (GdkAndroidSeat *self, gint32 tool_type);
+ 
+-gboolean gdk_android_seat_normalize_range (JNIEnv *env, jobject device, const AInputEvent *event, size_t pointer_index, guint32 mask, gfloat from, gfloat to, gdouble *out);
+-gdouble *gdk_android_seat_create_axes_from_motion_event (const AInputEvent *event, size_t pointer_index);
++gboolean gdk_android_seat_normalize_range (JNIEnv *env, jobject device, const GdkAndroidInputEvent *event, size_t pointer_index, guint32 mask, gfloat from, gfloat to, gdouble *out);
++gdouble *gdk_android_seat_create_axes_from_motion_event (const GdkAndroidInputEvent *event, size_t pointer_index);
+ void gdk_android_seat_consume_event (GdkDisplay *display, GdkEvent *event);
+ 
+ G_END_DECLS
+diff --git a/gdk/android/gdkandroidseat.c b/gdk/android/gdkandroidseat.c
+index d7b095b..5a279f1 100644
+--- a/gdk/android/gdkandroidseat.c
++++ b/gdk/android/gdkandroidseat.c
+@@ -232,7 +232,7 @@ gdk_android_seat_get_device_tool (GdkAndroidSeat *self, gint32 tool_type)
+ 
+ gboolean
+ gdk_android_seat_normalize_range (JNIEnv *env, jobject device,
+-                                  const AInputEvent *event, size_t pointer_index,
++                                  const GdkAndroidInputEvent *event, size_t pointer_index,
+                                   guint32 mask,
+                                   gfloat from, gfloat to,
+                                   gdouble *out)
+@@ -252,7 +252,7 @@ gdk_android_seat_normalize_range (JNIEnv *env, jobject device,
+   gfloat max = (*env)->CallFloatMethod (env,
+                                         axis,
+                                         gdk_android_get_java_cache ()->a_motion_range.get_max);
+-  gfloat value = AMotionEvent_getAxisValue (event, mask, pointer_index);
++  gfloat value = gdk_android_motion_get_axis_value (event, mask, pointer_index);
+ 
+   // $v_\text{new}=from+\frac{(v-min)*(to-from)}{max-min}$
+   *out = from + ((value - min) * (to - from)) / (max - min);
+@@ -260,18 +260,18 @@ gdk_android_seat_normalize_range (JNIEnv *env, jobject device,
+ }
+ 
+ gdouble *
+-gdk_android_seat_create_axes_from_motion_event (const AInputEvent *event, size_t pointer_index)
++gdk_android_seat_create_axes_from_motion_event (const GdkAndroidInputEvent *event, size_t pointer_index)
+ {
+   gdouble axes[GDK_AXIS_LAST] = { 0 };
+-  axes[0] = AMotionEvent_getX (event, pointer_index);
+-  axes[1] = AMotionEvent_getY (event, pointer_index);
++  axes[0] = gdk_android_motion_get_x (event, pointer_index);
++  axes[1] = gdk_android_motion_get_y (event, pointer_index);
+ 
+   JNIEnv *env = gdk_android_get_env ();
+   (*env)->PushLocalFrame (env, 1);
+   jobject device = (*env)->CallStaticObjectMethod (env,
+                                                    gdk_android_get_java_cache ()->a_input_device.klass,
+                                                    gdk_android_get_java_cache ()->a_input_device.get_device_from_id,
+-                                                   AInputEvent_getDeviceId (event));
++                                                   gdk_android_input_get_device_id (event));
+   if (device)
+     {
+       // The values from the from/to parameters are from the switch statement in
+-- 
+2.50.1
+
