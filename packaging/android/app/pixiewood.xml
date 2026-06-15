@@ -18,6 +18,9 @@
 		<glib>
 			<patch>hack</patch>
 		</glib>
+		<!-- glib hard-requires iconv; Bionic only has it from API 28, so for our
+		     minSdk-26 build provide GNU libiconv (wrap injected in android.yml). -->
+		<iconv/>
 		<fontconfig/>
 		<gtk>
 			<!-- Make gdk-android run on Android 8+ (API 26): the backend hard-calls
@@ -35,6 +38,8 @@
 			     which needs a (cross-unusable) Python.h. We don't need GIR. -->
 			<option>-Djson-glib:introspection=disabled</option>
 			<option>-Djson-glib:tests=false</option>
+			<!-- Link libiconv into libglib statically so no extra .so must be bundled. -->
+			<option>-Diconv:default_library=static</option>
 		</configure-options>
 		<architectures>
 			<arch>aarch64</arch>

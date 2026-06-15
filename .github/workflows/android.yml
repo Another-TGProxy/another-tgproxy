@@ -64,7 +64,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential ninja-build sassc glslc libxml2-utils \
+            build-essential ninja-build sassc glslc libxml2-utils gperf \
             libglib2.0-dev-bin gobject-introspection python3 gettext \
             valac libgtk-4-dev libadwaita-1-dev libjson-glib-dev \
             blueprint-compiler desktop-file-utils \
@@ -155,6 +155,10 @@ jobs:
              packaging/android/gtk/android-choreographer-fallback.patch \
              "$RUNNER_TEMP/pw/prepare/wraps/gtk/"
           sed -i 's/minSdk 31/minSdk 26/' "$RUNNER_TEMP/pw/generate/gradle.xsl"
+          # glib needs iconv, absent from Bionic below API 28; supply GNU libiconv as
+          # a subproject (pixiewood.xml lists <iconv/>, which reads this wrap).
+          mkdir -p "$RUNNER_TEMP/pw/prepare/wraps/iconv"
+          cp packaging/android/iconv.wrap "$RUNNER_TEMP/pw/prepare/wraps/iconv/iconv.wrap"
           # Pixiewood installs only --tags runtime; meson tags .mo catalogs 'i18n',
           # so translations would be dropped. Include them.
           sed -i 's/"--tags", "runtime")/"--tags", "runtime,i18n")/' "$RUNNER_TEMP/pw/pixiewood"
