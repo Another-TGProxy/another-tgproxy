@@ -1,33 +1,23 @@
-From 14847e3b267d4461816ab093afd9eb8fff7323aa Mon Sep 17 00:00:00 2001
+From 631d4d7eb488ceaa98d7eb86f7fa0ac194ec0cfd Mon Sep 17 00:00:00 2001
 From: Ampernic <ampernic@inbox.ru>
-Date: Mon, 15 Jun 2026 10:39:53 +0300
+Date: Mon, 15 Jun 2026 11:12:01 +0300
 Subject: [PATCH 1/2] gdk/android: read input events via JNI so the backend
  works below API 31
 
-AMotionEvent_fromJava, AKeyEvent_fromJava and AInputEvent_release are
-__INTRODUCED_IN(31) and were called unconditionally, so gdk-android could
-neither build nor run below Android 12 (API 31).
-
-Wrap the event in a small GdkAndroidInputEvent accessor: on API 31+ it holds
-the native AInputEvent* (used only when android_get_device_api_level() >= 31);
-below 31 it holds the Java MotionEvent/KeyEvent and every field is read via the
-matching JNI method (cached in the refcache). The API-31 calls are runtime-gated
-and their unguarded-availability diagnostic is locally suppressed; the symbols
-are weak-imported.
-
-Also make the JNI refcache tolerant of methods/fields absent on the running API:
-a missing one (e.g. DocumentsContract.isChildDocument, or a field that yields a
-NULL fieldID and a "fid == null" JNI fatal) otherwise aborts the process at load.
-Clear the pending exception, skip the field access, and leave the id NULL so the
-backend loads on older devices (the absent feature just stays unavailable).
+AMotionEvent_fromJava/AKeyEvent_fromJava/AInputEvent_release are
+__INTRODUCED_IN(31); below 31 read the event via JNI from the Java
+MotionEvent/KeyEvent instead. Also make the JNI refcache tolerant of
+classes/methods/fields absent on older APIs (clear the pending exception
+and leave the cached id NULL) so init does not abort the VM on, e.g.,
+android.graphics.BlendMode (API 29), which the backend never calls.
 ---
  gdk/android/gdkandroidevents-private.h |  29 +++
  gdk/android/gdkandroidevents.c         | 244 +++++++++++++++++++++----
  gdk/android/gdkandroidinit-private.h   |  25 +++
- gdk/android/gdkandroidinit.c           |  55 +++++-
+ gdk/android/gdkandroidinit.c           | 135 ++++++++++++--
  gdk/android/gdkandroidseat-private.h   |   6 +-
  gdk/android/gdkandroidseat.c           |  12 +-
- 6 files changed, 313 insertions(+), 58 deletions(-)
+ 6 files changed, 385 insertions(+), 66 deletions(-)
 
 diff --git a/gdk/android/gdkandroidevents-private.h b/gdk/android/gdkandroidevents-private.h
 index c685b1a..39e2963 100644
@@ -517,65 +507,289 @@ index e76dfd6..2199f5e 100644
      jclass klass;
      jmethodID get_device_from_id;
 diff --git a/gdk/android/gdkandroidinit.c b/gdk/android/gdkandroidinit.c
-index e2ed7f8..f37e355 100644
+index e2ed7f8..75759a2 100644
 --- a/gdk/android/gdkandroidinit.c
 +++ b/gdk/android/gdkandroidinit.c
-@@ -107,27 +107,37 @@ static GdkAndroidJavaCache gdk_android_java_cache;
+@@ -105,29 +105,56 @@ static jobject gdk_android_user_classloader = NULL;
  
- #define POPULATE_REFCACHE_METHOD(cklass, cname, jname, signature) {                                                         \
-     gdk_android_java_cache.cklass.cname = (*env)->GetMethodID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
-+    if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* absent on this API: leave the id NULL, don't abort */ \
+ static GdkAndroidJavaCache gdk_android_java_cache;
+ 
+-#define POPULATE_REFCACHE_METHOD(cklass, cname, jname, signature) {                                                         \
+-    gdk_android_java_cache.cklass.cname = (*env)->GetMethodID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
++/* All POPULATE_REFCACHE_* are guarded with `if (klass != NULL)`: on an API below
++ * the one that introduced a class, the inline FindClass leaves klass NULL (see the
++ * ExceptionClear after each FindClass), and calling Get*ID with a NULL class aborts
++ * the VM ("java_class == null"). Skipping leaves the id/object NULL — fine for the
++ * entries the backend only uses behind an api-level gate (or not at all). */
++#define POPULATE_REFCACHE_METHOD(cklass, cname, jname, signature) {                                                           \
++    if (gdk_android_java_cache.cklass.klass != NULL) {                                                                        \
++      gdk_android_java_cache.cklass.cname = (*env)->GetMethodID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
++      if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* absent on this API: leave the id NULL */             \
++    }                                                                                                                         \
    }
- #define POPULATE_STATIC_REFCACHE_METHOD(cklass, cname, jname, signature) {                                                        \
-     gdk_android_java_cache.cklass.cname = (*env)->GetStaticMethodID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
-+    if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* absent on this API: leave the id NULL, don't abort */     \
+-#define POPULATE_STATIC_REFCACHE_METHOD(cklass, cname, jname, signature) {                                                        \
+-    gdk_android_java_cache.cklass.cname = (*env)->GetStaticMethodID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
++#define POPULATE_STATIC_REFCACHE_METHOD(cklass, cname, jname, signature) {                                                          \
++    if (gdk_android_java_cache.cklass.klass != NULL) {                                                                             \
++      gdk_android_java_cache.cklass.cname = (*env)->GetStaticMethodID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
++      if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* absent on this API: leave the id NULL */                  \
++    }                                                                                                                              \
    }
- #define POPULATE_REFCACHE_MEMBER(cklass, cname, jname, signature) {                                                        \
-     gdk_android_java_cache.cklass.cname = (*env)->GetFieldID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
-+    if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env);                                                       \
+-#define POPULATE_REFCACHE_MEMBER(cklass, cname, jname, signature) {                                                        \
+-    gdk_android_java_cache.cklass.cname = (*env)->GetFieldID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
++#define POPULATE_REFCACHE_MEMBER(cklass, cname, jname, signature) {                                                          \
++    if (gdk_android_java_cache.cklass.klass != NULL) {                                                                       \
++      gdk_android_java_cache.cklass.cname = (*env)->GetFieldID (env, gdk_android_java_cache.cklass.klass, jname, signature); \
++      if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env);                                                       \
++    }                                                                                                                        \
    }
 -#define POPULATE_REFCACHE_FIELD(cklass, cname, jname) {                                                                           \
 -    jfieldID cklass##_##cname = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, "I");                  \
 -    gdk_android_java_cache.cklass.cname = (*env)->GetStaticIntField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname); \
-+#define POPULATE_REFCACHE_FIELD(cklass, cname, jname) {                                                                                 \
-+    jfieldID cklass##_##cname = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, "I");                        \
-+    if ((*env)->ExceptionCheck (env)) { (*env)->ExceptionClear (env); gdk_android_java_cache.cklass.cname = 0; }                        \
-+    else gdk_android_java_cache.cklass.cname = (*env)->GetStaticIntField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname);  \
++#define POPULATE_REFCACHE_FIELD(cklass, cname, jname) {                                                                                   \
++    if (gdk_android_java_cache.cklass.klass != NULL) {                                                                                    \
++      jfieldID cklass##_##cname = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, "I");                        \
++      if ((*env)->ExceptionCheck (env)) { (*env)->ExceptionClear (env); gdk_android_java_cache.cklass.cname = 0; }                        \
++      else gdk_android_java_cache.cklass.cname = (*env)->GetStaticIntField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname);  \
++    }                                                                                                                                     \
    }
 -#define POPULATE_REFCACHE_ENUM(cklass, cname, jname, signature) {                                                              \
 -    jfieldID cklass##_##cname##_id = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, signature);    \
 -    jobject cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id); \
 -    gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                        \
 -    (*env)->DeleteLocalRef (env, cklass##_##cname);                                                                            \
-+#define POPULATE_REFCACHE_ENUM(cklass, cname, jname, signature) {                                                                \
-+    jfieldID cklass##_##cname##_id = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, signature);      \
-+    if ((*env)->ExceptionCheck (env)) { (*env)->ExceptionClear (env); gdk_android_java_cache.cklass.cname = NULL; }              \
-+    else {                                                                                                                       \
-+      jobject cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id); \
-+      gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                       \
-+      (*env)->DeleteLocalRef (env, cklass##_##cname);                                                                           \
-+    }                                                                                                                          \
++#define POPULATE_REFCACHE_ENUM(cklass, cname, jname, signature) {                                                                  \
++    if (gdk_android_java_cache.cklass.klass != NULL) {                                                                             \
++      jfieldID cklass##_##cname##_id = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, signature);      \
++      if ((*env)->ExceptionCheck (env)) { (*env)->ExceptionClear (env); gdk_android_java_cache.cklass.cname = NULL; }              \
++      else {                                                                                                                       \
++        jobject cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id); \
++        gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                       \
++        (*env)->DeleteLocalRef (env, cklass##_##cname);                                                                           \
++      }                                                                                                                          \
++    }                                                                                                                            \
    }
- #define POPULATE_REFCACHE_STRING(cklass, cname, jname) {                                                                               \
-     jfieldID cklass##_##cname##_id = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, "Ljava/lang/String;"); \
+-#define POPULATE_REFCACHE_STRING(cklass, cname, jname) {                                                                               \
+-    jfieldID cklass##_##cname##_id = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, "Ljava/lang/String;"); \
 -    jstring cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id);         \
 -    gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                                \
-+    if ((*env)->ExceptionCheck (env)) { (*env)->ExceptionClear (env); gdk_android_java_cache.cklass.cname = NULL; }                    \
-+    else {                                                                                                                            \
-+      jstring cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id);       \
-+      gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                             \
-+    }                                                                                                                                 \
++#define POPULATE_REFCACHE_STRING(cklass, cname, jname) {                                                                                 \
++    if (gdk_android_java_cache.cklass.klass != NULL) {                                                                                   \
++      jfieldID cklass##_##cname##_id = (*env)->GetStaticFieldID (env, gdk_android_java_cache.cklass.klass, jname, "Ljava/lang/String;"); \
++      if ((*env)->ExceptionCheck (env)) { (*env)->ExceptionClear (env); gdk_android_java_cache.cklass.cname = NULL; }                    \
++      else {                                                                                                                            \
++        jstring cklass##_##cname = (*env)->GetStaticObjectField (env, gdk_android_java_cache.cklass.klass, cklass##_##cname##_id);       \
++        gdk_android_java_cache.cklass.cname = (*env)->NewGlobalRef (env, cklass##_##cname);                                             \
++      }                                                                                                                                 \
++    }                                                                                                                                   \
  }
  
  #define POPULATE_REFCACHE_CURSOR_TYPE(cname, jname, cssname) {                                                                                                    \
-@@ -520,6 +530,29 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+@@ -143,6 +170,7 @@ gdk_android_init_find_class_using_classloader (JNIEnv *env,
+   (*env)->PushLocalFrame (env, 3);
+ 
+   jclass cl_class = (*env)->FindClass (env, "java/lang/ClassLoader");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   jmethodID load_class = (*env)->GetMethodID (env, cl_class, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
+   jstring class_name = (*env)->NewStringUTF (env, klass);
+   jclass jklass = (*env)->CallObjectMethod (env, class_loader, load_class, class_name);
+@@ -262,6 +290,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   // BEGIN DEPRECATION CHECK
+ 
+   jclass android_activity_class = (*env)->FindClass (env, "android/app/Activity");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_activity.klass = (*env)->NewGlobalRef (env, android_activity_class);
+   POPULATE_REFCACHE_METHOD (a_activity, get_task_id, "getTaskId", "()I")
+   POPULATE_REFCACHE_METHOD (a_activity, get_window_manager, "getWindowManager", "()Landroid/view/WindowManager;")
+@@ -275,6 +304,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_FIELD (a_activity, result_cancelled, "RESULT_CANCELED")
+ 
+   jclass android_context = (*env)->FindClass (env, "android/content/Context");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_context.klass = (*env)->NewGlobalRef (env, android_context);
+   POPULATE_REFCACHE_METHOD (a_context, get_color, "getColor", "(I)I")
+   POPULATE_REFCACHE_METHOD (a_context, get_content_resolver, "getContentResolver", "()Landroid/content/ContentResolver;")
+@@ -284,6 +314,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_STRING (a_context, clipboard_service, "CLIPBOARD_SERVICE")
+ 
+   jclass android_content_resolver = (*env)->FindClass (env, "android/content/ContentResolver");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_content_resolver.klass = (*env)->NewGlobalRef (env, android_content_resolver);
+   POPULATE_REFCACHE_METHOD (a_content_resolver, get_type, "getType", "(Landroid/net/Uri;)Ljava/lang/String;");
+   POPULATE_REFCACHE_METHOD (a_content_resolver, open_asset_fd, "openAssetFileDescriptor", "(Landroid/net/Uri;Ljava/lang/String;Landroid/os/CancellationSignal;)Landroid/content/res/AssetFileDescriptor;");
+@@ -291,6 +322,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_METHOD (a_content_resolver, query, "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
+ 
+   jclass android_asset_fd = (*env)->FindClass (env, "android/content/res/AssetFileDescriptor");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_asset_fd.klass = (*env)->NewGlobalRef (env, android_asset_fd);
+   POPULATE_REFCACHE_METHOD (a_asset_fd, create_istream, "createInputStream", "()Ljava/io/FileInputStream;")
+   POPULATE_REFCACHE_METHOD (a_asset_fd, create_ostream, "createOutputStream", "()Ljava/io/FileOutputStream;")
+@@ -299,6 +331,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   gdk_android_java_cache.a_asset_fd.mode_overwrite = (*env)->NewGlobalRef (env, (*env)->NewStringUTF (env, "wt"));
+ 
+   jclass android_documents_contract = (*env)->FindClass (env, "android/provider/DocumentsContract");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_documents_contract.klass = (*env)->NewGlobalRef (env, android_documents_contract);
+   POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, get_document_id, "getDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;");
+   POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, get_tree_document_id, "getTreeDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;");
+@@ -313,6 +346,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, rename_document, "renameDocument", "(Landroid/content/ContentResolver;Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;");
+ 
+   jclass android_documents_contract_document = (*env)->FindClass (env, "android/provider/DocumentsContract$Document");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_documents_contract_document.klass = (*env)->NewGlobalRef (env, android_documents_contract_document);
+   POPULATE_REFCACHE_STRING (a_documents_contract_document, column_document_id, "COLUMN_DOCUMENT_ID")
+   POPULATE_REFCACHE_STRING (a_documents_contract_document, column_display_name, "COLUMN_DISPLAY_NAME")
+@@ -332,6 +366,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_STRING (a_documents_contract_document, mime_directory, "MIME_TYPE_DIR")
+ 
+   jclass android_cursor = (*env)->FindClass (env, "android/database/Cursor");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_cursor.klass = (*env)->NewGlobalRef (env, android_cursor);
+   POPULATE_REFCACHE_METHOD (a_cursor, get_int, "getInt", "(I)I")
+   POPULATE_REFCACHE_METHOD (a_cursor, get_long, "getLong", "(I)J")
+@@ -341,10 +376,12 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_METHOD (a_cursor, close, "close", "()V")
+ 
+   jclass android_resources = (*env)->FindClass (env, "android/content/res/Resources");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_resources.klass = (*env)->NewGlobalRef (env, android_resources);
+   POPULATE_REFCACHE_METHOD (a_resources, get_configuration, "getConfiguration", "()Landroid/content/res/Configuration;")
+ 
+   jclass android_configuration = (*env)->FindClass (env, "android/content/res/Configuration");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_configuration.klass = (*env)->NewGlobalRef (env, android_configuration);
+   POPULATE_REFCACHE_MEMBER (a_configuration, ui, "uiMode", "I")
+   POPULATE_REFCACHE_FIELD (a_configuration, ui_night_undefined, "UI_MODE_NIGHT_UNDEFINED")
+@@ -352,10 +389,12 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_FIELD (a_configuration, ui_night_yes, "UI_MODE_NIGHT_YES")
+ 
+   jclass android_res_color = (*env)->FindClass (env, "android/R$color");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_res_color.klass = (*env)->NewGlobalRef (env, android_res_color);
+   POPULATE_REFCACHE_FIELD (a_res_color, system_accent1_600, "system_accent1_600")
+ 
+   jclass android_clipboard_manager = (*env)->FindClass (env, "android/content/ClipboardManager");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_clipboard_manager.klass = (*env)->NewGlobalRef (env, android_clipboard_manager);
+   POPULATE_REFCACHE_METHOD (a_clipboard_manager, get_primary_clip, "getPrimaryClip", "()Landroid/content/ClipData;")
+   POPULATE_REFCACHE_METHOD (a_clipboard_manager, set_primary_clip, "setPrimaryClip", "(Landroid/content/ClipData;)V")
+@@ -364,6 +403,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_METHOD (a_clipboard_manager, remove_change_listener, "removePrimaryClipChangedListener", "(Landroid/content/ClipboardManager$OnPrimaryClipChangedListener;)V")
+ 
+   jclass android_clip_desc = (*env)->FindClass (env, "android/content/ClipDescription");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_clip_desc.klass = (*env)->NewGlobalRef (env, android_clip_desc);
+   POPULATE_REFCACHE_METHOD (a_clip_desc, get_mime_type_count, "getMimeTypeCount", "()I")
+   POPULATE_REFCACHE_METHOD (a_clip_desc, get_mime_type, "getMimeType", "(I)Ljava/lang/String;")
+@@ -371,6 +411,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_STRING (a_clip_desc, mime_text_plain, "MIMETYPE_TEXT_PLAIN")
+ 
+   jclass android_clipdata = (*env)->FindClass (env, "android/content/ClipData");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_clipdata.klass = (*env)->NewGlobalRef (env, android_clipdata);
+   POPULATE_REFCACHE_METHOD (a_clipdata, add_item, "addItem", "(Landroid/content/ContentResolver;Landroid/content/ClipData$Item;)V")
+   POPULATE_REFCACHE_METHOD (a_clipdata, get_item_count, "getItemCount", "()I")
+@@ -380,6 +421,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_STATIC_REFCACHE_METHOD (a_clipdata, new_uri, "newUri", "(Landroid/content/ContentResolver;Ljava/lang/CharSequence;Landroid/net/Uri;)Landroid/content/ClipData;")
+ 
+   jclass android_clipdata_item = (*env)->FindClass (env, "android/content/ClipData$Item");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_clipdata_item.klass = (*env)->NewGlobalRef (env, android_clipdata_item);
+   POPULATE_REFCACHE_METHOD (a_clipdata_item, constructor_text, "<init>", "(Ljava/lang/CharSequence;)V")
+   POPULATE_REFCACHE_METHOD (a_clipdata_item, constructor_html, "<init>", "(Ljava/lang/CharSequence;Ljava/lang/String;)V")
+@@ -389,6 +431,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_METHOD (a_clipdata_item, get_uri, "getUri", "()Landroid/net/Uri;")
+ 
+   jclass android_view_class = (*env)->FindClass (env, "android/view/View");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_view.klass = (*env)->NewGlobalRef (env, android_view_class);
+   POPULATE_REFCACHE_METHOD (a_view, get_context, "getContext", "()Landroid/content/Context;")
+   POPULATE_REFCACHE_METHOD (a_view, get_display, "getDisplay", "()Landroid/view/Display;")
+@@ -397,10 +440,12 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_FIELD (a_view, drag_global_uri_read, "DRAG_FLAG_GLOBAL_URI_READ")
+ 
+   jclass android_display_class = (*env)->FindClass (env, "android/view/Display");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_display.klass = (*env)->NewGlobalRef (env, android_display_class);
+   POPULATE_REFCACHE_METHOD (a_display, get_refresh_rate, "getRefreshRate", "()F")
+ 
+   jclass android_pointericon = (*env)->FindClass (env, "android/view/PointerIcon");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_pointericon.klass = (*env)->NewGlobalRef (env, android_pointericon);
+   gdk_android_java_cache.a_pointericon.gdk_type_mapping = g_hash_table_new (g_str_hash, g_str_equal);
+   POPULATE_REFCACHE_CURSOR_TYPE (type_alias, "TYPE_ALIAS", "alias")
+@@ -430,10 +475,12 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   // - move, not-allowed and progress
+ 
+   jclass android_bitmap = (*env)->FindClass (env, "android/graphics/Bitmap");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_bitmap.klass = (*env)->NewGlobalRef (env, android_bitmap);
+   POPULATE_STATIC_REFCACHE_METHOD (a_bitmap, create_from_array, "createBitmap", "([IIILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;")
+   {
+     jclass android_bitmap_config = (*env)->FindClass (env, "android/graphics/Bitmap$Config");
++    if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+     jfieldID config_argb8888_field = (*env)->GetStaticFieldID (env, android_bitmap_config, "ARGB_8888", "Landroid/graphics/Bitmap$Config;");
+     jobject config_argb8888 = (*env)->GetStaticObjectField (env, android_bitmap_config, config_argb8888_field);
+     gdk_android_java_cache.a_bitmap.argb8888 = (*env)->NewGlobalRef (env, config_argb8888);
+@@ -442,6 +489,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   }
+ 
+   jclass android_intent_class = (*env)->FindClass (env, "android/content/Intent");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_intent.klass = (*env)->NewGlobalRef (env, android_intent_class);
+   POPULATE_REFCACHE_METHOD (a_intent, constructor, "<init>", "(Landroid/content/Context;Ljava/lang/Class;)V")
+   POPULATE_REFCACHE_METHOD (a_intent, constructor_action, "<init>", "(Ljava/lang/String;)V")
+@@ -485,11 +533,13 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   }
+ 
+   jclass android_bundle = (*env)->FindClass (env, "android/os/Bundle");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_bundle.klass = (*env)->NewGlobalRef (env, android_bundle);
+   POPULATE_REFCACHE_METHOD (a_bundle, constructor, "<init>", "()V")
+   POPULATE_REFCACHE_METHOD (a_bundle, put_binder, "putBinder", "(Ljava/lang/String;Landroid/os/IBinder;)V")
+ 
+   jclass android_surface_holder_class = (*env)->FindClass (env, "android/view/SurfaceHolder");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_surfaceholder.klass = (*env)->NewGlobalRef (env, android_surface_holder_class);
+   POPULATE_REFCACHE_METHOD (a_surfaceholder, get_surface, "getSurface", "()Landroid/view/Surface;")
+   POPULATE_REFCACHE_METHOD (a_surfaceholder, get_surface_frame, "getSurfaceFrame", "()Landroid/graphics/Rect;")
+@@ -498,14 +548,17 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_METHOD (a_surfaceholder, unlock_canvas_and_post, "unlockCanvasAndPost", "(Landroid/graphics/Canvas;)V")
+ 
+   jclass android_canvas_class = (*env)->FindClass (env, "android/graphics/Canvas");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_canvas.klass = (*env)->NewGlobalRef (env, android_canvas_class);
+   POPULATE_REFCACHE_METHOD (a_canvas, draw_color, "drawColor", "(ILandroid/graphics/BlendMode;)V")
+ 
+   jclass android_blendmode = (*env)->FindClass (env, "android/graphics/BlendMode");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_blendmode.klass = (*env)->NewGlobalRef (env, android_blendmode);
+   POPULATE_REFCACHE_ENUM (a_blendmode, clear, "CLEAR", "Landroid/graphics/BlendMode;")
+ 
+   jclass android_rect_class = (*env)->FindClass (env, "android/graphics/Rect");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_rect.klass = (*env)->NewGlobalRef (env, android_rect_class);
+   POPULATE_REFCACHE_METHOD (a_rect, constructor, "<init>", "(IIII)V")
+   POPULATE_REFCACHE_MEMBER (a_rect, bottom, "bottom", "I");
+@@ -514,19 +567,48 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_MEMBER (a_rect, top, "top", "I");
+ 
+   jclass android_rectf_class = (*env)->FindClass (env, "android/graphics/RectF");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_rectf.klass = (*env)->NewGlobalRef (env, android_rectf_class);
+   POPULATE_REFCACHE_METHOD (a_rectf, constructor, "<init>", "(FFFF)V")
+ 
    jclass android_input_event = (*env)->FindClass (env, "android/view/InputEvent");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
    gdk_android_java_cache.a_input_event.klass = (*env)->NewGlobalRef (env, android_input_event);
    POPULATE_REFCACHE_METHOD (a_input_event, get_device, "getDevice", "()Landroid/view/InputDevice;")
 +  POPULATE_REFCACHE_METHOD (a_input_event, get_source, "getSource", "()I")
 +  POPULATE_REFCACHE_METHOD (a_input_event, get_device_id, "getDeviceId", "()I")
 +
 +  jclass android_motion_event = (*env)->FindClass (env, "android/view/MotionEvent");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
 +  gdk_android_java_cache.a_motion_event.klass = (*env)->NewGlobalRef (env, android_motion_event);
 +  POPULATE_REFCACHE_METHOD (a_motion_event, get_action, "getAction", "()I")
 +  POPULATE_REFCACHE_METHOD (a_motion_event, get_pointer_count, "getPointerCount", "()I")
@@ -590,6 +804,7 @@ index e2ed7f8..f37e355 100644
 +  POPULATE_REFCACHE_METHOD (a_motion_event, get_axis_value, "getAxisValue", "(II)F")
 +
 +  jclass android_key_event = (*env)->FindClass (env, "android/view/KeyEvent");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
 +  gdk_android_java_cache.a_key_event.klass = (*env)->NewGlobalRef (env, android_key_event);
 +  POPULATE_REFCACHE_METHOD (a_key_event, get_action, "getAction", "()I")
 +  POPULATE_REFCACHE_METHOD (a_key_event, get_meta_state, "getMetaState", "()I")
@@ -597,8 +812,117 @@ index e2ed7f8..f37e355 100644
 +  POPULATE_REFCACHE_METHOD (a_key_event, get_event_time, "getEventTime", "()J")
  
    jclass android_input_device = (*env)->FindClass (env, "android/view/InputDevice");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
    gdk_android_java_cache.a_input_device.klass = (*env)->NewGlobalRef (env, android_input_device);
-@@ -715,6 +748,8 @@ gdk_android_finalize (void)
+   POPULATE_STATIC_REFCACHE_METHOD (a_input_device, get_device_from_id, "getDevice", "(I)Landroid/view/InputDevice;")
+   POPULATE_REFCACHE_METHOD (a_input_device, get_motion_range, "getMotionRange", "(I)Landroid/view/InputDevice$MotionRange;")
+ 
+   jclass android_motion_range = (*env)->FindClass (env, "android/view/InputDevice$MotionRange");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_motion_range.klass = (*env)->NewGlobalRef (env, android_motion_range);
+   POPULATE_REFCACHE_METHOD (a_motion_range, get_axis, "getAxis", "()I")
+   POPULATE_REFCACHE_METHOD (a_motion_range, get_min, "getMin", "()F")
+@@ -534,6 +616,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_METHOD (a_motion_range, get_resolution, "getResolution", "()F")
+ 
+   jclass android_drag_event = (*env)->FindClass (env, "android/view/DragEvent");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_drag_event.klass = (*env)->NewGlobalRef (env, android_drag_event);
+   POPULATE_REFCACHE_METHOD (a_drag_event, get_action, "getAction", "()I")
+   POPULATE_REFCACHE_METHOD (a_drag_event, get_clip_data, "getClipData", "()Landroid/content/ClipData;")
+@@ -550,10 +633,12 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_FIELD (a_drag_event, action_drop, "ACTION_DROP")
+ 
+   jclass android_activity_manager = (*env)->FindClass (env, "android/app/ActivityManager");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_activity_manager.klass = (*env)->NewGlobalRef (env, android_activity_manager);
+   POPULATE_REFCACHE_METHOD (a_activity_manager, move_task_to_font, "moveTaskToFront", "(IILandroid/os/Bundle;)V")
+ 
+   jclass android_uri = (*env)->FindClass (env, "android/net/Uri");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.a_uri.klass = (*env)->NewGlobalRef (env, android_uri);
+   POPULATE_REFCACHE_METHOD (a_uri, get_path, "getPath", "()Ljava/lang/String;")
+   POPULATE_REFCACHE_METHOD (a_uri, get_scheme, "getScheme", "()Ljava/lang/String;")
+@@ -561,26 +646,31 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_STATIC_REFCACHE_METHOD (a_uri, parse, "parse", "(Ljava/lang/String;)Landroid/net/Uri;")
+ 
+   jclass java_file_istream = (*env)->FindClass (env, "java/io/FileInputStream");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_file_istream.klass = (*env)->NewGlobalRef (env, java_file_istream);
+   POPULATE_REFCACHE_METHOD (j_file_istream, get_channel, "getChannel", "()Ljava/nio/channels/FileChannel;")
+ 
+   jclass java_istream = (*env)->FindClass (env, "java/io/InputStream");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_istream.klass = (*env)->NewGlobalRef (env, java_istream);
+   POPULATE_REFCACHE_METHOD (j_istream, close, "close", "()V")
+   POPULATE_REFCACHE_METHOD (j_istream, read, "read", "([BII)I")
+   POPULATE_REFCACHE_METHOD (j_istream, skip, "skip", "(J)J")
+ 
+   jclass java_file_ostream = (*env)->FindClass (env, "java/io/FileOutputStream");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_file_ostream.klass = (*env)->NewGlobalRef (env, java_file_ostream);
+   POPULATE_REFCACHE_METHOD (j_file_istream, get_channel, "getChannel", "()Ljava/nio/channels/FileChannel;")
+ 
+   jclass java_ostream = (*env)->FindClass (env, "java/io/OutputStream");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_ostream.klass = (*env)->NewGlobalRef (env, java_ostream);
+   POPULATE_REFCACHE_METHOD (j_ostream, close, "close", "()V")
+   POPULATE_REFCACHE_METHOD (j_ostream, flush, "flush", "()V")
+   POPULATE_REFCACHE_METHOD (j_ostream, write, "write", "([BII)V")
+ 
+   jclass java_file_channel = (*env)->FindClass (env, "java/nio/channels/FileChannel");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_file_channel.klass = (*env)->NewGlobalRef (env, java_file_channel);
+   POPULATE_REFCACHE_METHOD (j_file_channel, get_position, "position", "()J")
+   POPULATE_REFCACHE_METHOD (j_file_channel, set_position, "position", "(J)Ljava/nio/channels/FileChannel;")
+@@ -588,16 +678,19 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_METHOD (j_file_channel, truncate, "truncate", "(J)Ljava/nio/channels/FileChannel;")
+ 
+   jclass java_urlconnection = (*env)->FindClass (env, "java/net/URLConnection");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_urlconnection.klass = (*env)->NewGlobalRef (env, java_urlconnection);
+   POPULATE_STATIC_REFCACHE_METHOD (j_urlconnection, guess_content_type_for_name, "guessContentTypeFromName", "(Ljava/lang/String;)Ljava/lang/String;")
+   gdk_android_java_cache.j_urlconnection.mime_binary_data = (*env)->NewGlobalRef (env, (*env)->NewStringUTF (env, "application/octet-stream"));
+ 
+ 
+   jclass java_arraylist = (*env)->FindClass (env, "java/util/ArrayList");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_arraylist.klass = (*env)->NewGlobalRef (env, java_arraylist);
+   POPULATE_REFCACHE_METHOD (j_arraylist, constructor, "<init>", "()V")
+ 
+   jclass java_list = (*env)->FindClass (env, "java/util/List");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_list.klass = (*env)->NewGlobalRef (env, java_list);
+   POPULATE_REFCACHE_METHOD (j_list, add, "add", "(Ljava/lang/Object;)Z")
+   POPULATE_REFCACHE_METHOD (j_list, get, "get", "(I)Ljava/lang/Object;")
+@@ -605,15 +698,18 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   POPULATE_REFCACHE_METHOD (j_list, to_array, "toArray", "([Ljava/lang/Object;)[Ljava/lang/Object;")
+ 
+   jclass java_string = (*env)->FindClass (env, "java/lang/String");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_string.klass = (*env)->NewGlobalRef (env, java_string);
+ 
+   jclass java_object = (*env)->FindClass (env, "java/lang/Object");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_object.klass = (*env)->NewGlobalRef (env, java_object);
+   POPULATE_REFCACHE_METHOD (j_object, equals, "equals", "(Ljava/lang/Object;)Z")
+   POPULATE_REFCACHE_METHOD (j_object, hash_code, "hashCode", "()I")
+   POPULATE_REFCACHE_METHOD (j_object, to_string, "toString", "()Ljava/lang/String;")
+ 
+   jclass java_char_conversion_exception = (*env)->FindClass (env, "java/io/CharConversionException");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_char_conversion_exception.klass = (*env)->NewGlobalRef (env, java_char_conversion_exception);
+ 
+   gdk_android_java_cache.j_exceptions.io_exception = (*env)->NewGlobalRef (env, (*env)->FindClass (env, "java/io/IOException"));
+@@ -629,6 +725,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+   gdk_android_java_cache.j_exceptions.channel_closed_exception = (*env)->NewGlobalRef (env, (*env)->FindClass (env, "java/nio/channels/ClosedChannelException"));
+ 
+   jclass java_throwable = (*env)->FindClass (env, "java/lang/Throwable");
++  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
+   gdk_android_java_cache.j_throwable.klass = (*env)->NewGlobalRef (env, java_throwable);
+   POPULATE_REFCACHE_METHOD (j_throwable, get_message, "getMessage", "()Ljava/lang/String;")
+ 
+@@ -715,6 +812,8 @@ gdk_android_finalize (void)
    (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_rect.klass);
    (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_rectf.klass);
    (*env)->DeleteGlobalRef (env, gdk_android_java_cache.a_input_event.klass);
