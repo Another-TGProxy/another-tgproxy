@@ -35,7 +35,21 @@ namespace TgWsProxy {
             act_about.activate.connect (show_about);
             add_action (act_about);
             var act_quit = new SimpleAction ("quit", null);
-            act_quit.activate.connect (() => application.quit ());
+            act_quit.activate.connect (() => {
+#if ANDROID
+                // g_application_quit ends the GTK loop while the activity is still
+                // resumed, so it never finishes its lifecycle transition ("top
+                // resumed state loss timeout") and the START_STICKY service respawns
+                // the process. Go through the Android lifecycle instead.
+                var s = get_surface ();
+                if (s != null)
+                    Station.android_quit (s);
+                else
+                    application.quit ();
+#else
+                application.quit ();
+#endif
+            });
             add_action (act_quit);
 
             home_view.bind (client, service);
