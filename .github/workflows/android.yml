@@ -164,6 +164,7 @@ jobs:
              packaging/android/gtk/android-choreographer-fallback.patch \
              packaging/android/gtk/android-clipboard-lazy-manager.patch \
              packaging/android/gtk/android-window-insets-pre30.patch \
+             packaging/android/gtk/android-vulkan-procaddr-pre28.patch \
              "$RUNNER_TEMP/pw/prepare/wraps/gtk/"
           sed -i 's/minSdk 31/minSdk 26/' "$RUNNER_TEMP/pw/generate/gradle.xsl"
           # glib needs iconv, absent from Bionic below API 28; supply GNU libiconv as

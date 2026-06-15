@@ -25,13 +25,15 @@
 		<gtk>
 			<!-- Make gdk-android run on Android 8+ (API 26): the backend hard-calls
 			     API-31 input, API-29 choreographer and API-30 window-insets/IME APIs,
-			     and fetches the clipboard manager from a not-yet-bound activity context;
-			     these patches add pre-31/30/29 fallbacks and lazy clipboard init.
-			     gtk.wrap is pinned (in android.yml) to the commit they apply against. -->
+			     fetches the clipboard manager from a not-yet-bound activity context, and
+			     link-references Vulkan 1.1 symbols absent before API 28; these patches add
+			     pre-31/30/29/28 fallbacks and lazy clipboard init. gtk.wrap is pinned
+			     (in android.yml) to the commit they apply against. -->
 			<patch>android-input-jni</patch>
 			<patch>android-choreographer-fallback</patch>
 			<patch>android-clipboard-lazy-manager</patch>
 			<patch>android-window-insets-pre30</patch>
+			<patch>android-vulkan-procaddr-pre28</patch>
 		</gtk>
 		<libadwaita/>
 	</dependencies>
@@ -46,10 +48,11 @@
 			<!-- gdk-pixbuf's Android ImageDecoder loader needs API 30/31; disable it for
 			     our minSdk-26 build. SVG icons load via the rsvg loader, raster via GTK4. -->
 			<option>-Dgdk-pixbuf:android=disabled</option>
-			<!-- GTK4's Vulkan renderer links Vulkan 1.1 (vkGetPhysicalDeviceProperties2
-			     & co.), which libvulkan only exports from API 28. Disable it for the
-			     minSdk-26 build; GTK falls back to the GL (GLES) renderer. -->
-			<option>-Dgtk:vulkan=disabled</option>
+			<!-- Vulkan renderer stays ENABLED: the android-vulkan-procaddr-pre28 patch
+			     resolves the Vulkan 1.1 entry points via vkGetInstanceProcAddr so the
+			     minSdk-26 build links, runs Vulkan on API 28+ and falls back to GL on
+			     1.0 loaders (API 26-27). Needs glslc at build time (installed in CI). -->
+			<option>-Dgtk:vulkan=enabled</option>
 		</configure-options>
 		<architectures>
 			<arch>aarch64</arch>

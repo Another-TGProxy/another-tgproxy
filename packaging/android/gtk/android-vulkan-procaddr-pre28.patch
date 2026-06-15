@@ -1,0 +1,112 @@
+From d10b0fb93132c386d8dc8c326ec439ffd1d2566e Mon Sep 17 00:00:00 2001
+From: Ampernic <ampernic@inbox.ru>
+Date: Mon, 15 Jun 2026 14:26:06 +0300
+Subject: [PATCH] gdk/vulkan: load the Vulkan 1.1 instance functions via
+ vkGetInstanceProcAddr
+
+vkGetPhysicalDeviceFeatures2, vkGetPhysicalDeviceFormatProperties2 and
+vkGetPhysicalDeviceExternalSemaphoreProperties are Vulkan 1.1 core. On
+Android libvulkan only exports them as link-time symbols from API 28, so
+a minSdk-26 build cannot reference them directly (and unlike the NDK's
+android/*.h, the Khronos headers carry no __INTRODUCED_IN annotation, so
+the weak-symbol flag does not help). Resolve them through
+vkGetInstanceProcAddr after instance creation, store the PFNs on the
+display, and bail to the GL renderer if the loader is 1.0 (NULL PFNs).
+No behavior change on API 28+ / desktop.
+---
+ gdk/gdkdisplayprivate.h |  7 +++++++
+ gdk/gdkvulkancontext.c  | 32 +++++++++++++++++++++++++++-----
+ 2 files changed, 34 insertions(+), 5 deletions(-)
+
+diff --git a/gdk/gdkdisplayprivate.h b/gdk/gdkdisplayprivate.h
+index 53ac789..1415431 100644
+--- a/gdk/gdkdisplayprivate.h
++++ b/gdk/gdkdisplayprivate.h
+@@ -107,6 +107,13 @@ struct _GdkDisplay
+   VkInstance vk_instance;
+   VkDebugReportCallbackEXT vk_debug_callback;
+   VkPhysicalDevice vk_physical_device;
++  /* Vulkan 1.1 instance-level entry points resolved via vkGetInstanceProcAddr:
++   * Android's libvulkan only exports them as link-time symbols from API 28, so on
++   * a minSdk-26 build they cannot be referenced directly. Loaded after the instance
++   * is created; NULL on a Vulkan 1.0 loader (then the instance setup bails to GL). */
++  PFN_vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceFeatures2;
++  PFN_vkGetPhysicalDeviceFormatProperties2 vkGetPhysicalDeviceFormatProperties2;
++  PFN_vkGetPhysicalDeviceExternalSemaphoreProperties vkGetPhysicalDeviceExternalSemaphoreProperties;
+   VkDevice vk_device;
+   VkQueue vk_queue;
+   uint32_t vk_queue_family_index;
+diff --git a/gdk/gdkvulkancontext.c b/gdk/gdkvulkancontext.c
+index 0f324fd..914b673 100644
+--- a/gdk/gdkvulkancontext.c
++++ b/gdk/gdkvulkancontext.c
+@@ -610,7 +610,7 @@ physical_device_supports_extension (VkPhysicalDevice  device,
+ }
+ 
+ static GdkVulkanFeatures
+-physical_device_check_features (VkPhysicalDevice device)
++physical_device_check_features (GdkDisplay *display, VkPhysicalDevice device)
+ {
+   VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT swapchain_maintenance1_features = {
+       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
+@@ -632,8 +632,8 @@ physical_device_check_features (VkPhysicalDevice device)
+   };
+   GdkVulkanFeatures features;
+ 
+-  vkGetPhysicalDeviceFeatures2 (device, &v10_features);
+-  vkGetPhysicalDeviceExternalSemaphoreProperties (device,
++  display->vkGetPhysicalDeviceFeatures2 (device, &v10_features);
++  display->vkGetPhysicalDeviceExternalSemaphoreProperties (device,
+                                                   &(VkPhysicalDeviceExternalSemaphoreInfo) {
+ 		                                      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_SEMAPHORE_INFO,
+ 		                                      .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT,
+@@ -1756,7 +1756,7 @@ gdk_display_create_vulkan_device (GdkDisplay  *display,
+       GdkVulkanFeatures features, device_features;
+       uint32_t n_queue_props;
+ 
+-      device_features = physical_device_check_features (devices[i]);
++      device_features = physical_device_check_features (display, devices[i]);
+ 
+       features = device_features & ~skip_features;
+ 
+@@ -2021,6 +2021,28 @@ gdk_display_create_vulkan_instance (GdkDisplay  *display,
+       return FALSE;
+     }
+ 
++  /* Resolve the Vulkan 1.1 instance-level functions at runtime rather than linking
++   * them directly: on Android they are only exported by libvulkan from API 28, so a
++   * minSdk-26 build cannot reference them at link time. A Vulkan 1.0 loader returns
++   * NULL for the 1.1 core names — treat that as "no usable Vulkan" and fall back to
++   * the GL renderer instead of crashing later when one of them is called. */
++  display->vkGetPhysicalDeviceFeatures2 = (PFN_vkGetPhysicalDeviceFeatures2)
++      vkGetInstanceProcAddr (display->vk_instance, "vkGetPhysicalDeviceFeatures2");
++  display->vkGetPhysicalDeviceFormatProperties2 = (PFN_vkGetPhysicalDeviceFormatProperties2)
++      vkGetInstanceProcAddr (display->vk_instance, "vkGetPhysicalDeviceFormatProperties2");
++  display->vkGetPhysicalDeviceExternalSemaphoreProperties = (PFN_vkGetPhysicalDeviceExternalSemaphoreProperties)
++      vkGetInstanceProcAddr (display->vk_instance, "vkGetPhysicalDeviceExternalSemaphoreProperties");
++  if (display->vkGetPhysicalDeviceFeatures2 == NULL ||
++      display->vkGetPhysicalDeviceFormatProperties2 == NULL ||
++      display->vkGetPhysicalDeviceExternalSemaphoreProperties == NULL)
++    {
++      g_set_error_literal (error, GDK_VULKAN_ERROR, GDK_VULKAN_ERROR_UNSUPPORTED,
++                           "Vulkan 1.1 instance functions are unavailable (loader is 1.0)");
++      vkDestroyInstance (display->vk_instance, NULL);
++      display->vk_instance = VK_NULL_HANDLE;
++      return FALSE;
++    }
++
+   if (have_debug_report)
+     {
+       PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallbackEXT;
+@@ -2153,7 +2175,7 @@ gdk_vulkan_context_add_dmabuf_format (GdkDisplay              *display,
+     return;
+ 
+   modifier_props.drmFormatModifierCount = G_N_ELEMENTS (modifier_list);
+-  vkGetPhysicalDeviceFormatProperties2 (display->vk_physical_device,
++  display->vkGetPhysicalDeviceFormatProperties2 (display->vk_physical_device,
+                                         vk_format,
+                                         &props);
+   g_warn_if_fail (modifier_props.drmFormatModifierCount < G_N_ELEMENTS (modifier_list));
+-- 
+2.50.1
+
