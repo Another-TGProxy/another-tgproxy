@@ -24,13 +24,14 @@
 		<fontconfig/>
 		<gtk>
 			<!-- Make gdk-android run on Android 8+ (API 26): the backend hard-calls
-			     API-31 input and API-29 choreographer NDK functions, and fetches the
-			     clipboard manager from a not-yet-bound activity context; these patches
-			     add pre-31/pre-29 fallbacks and lazy clipboard init. gtk.wrap is pinned
-			     (in android.yml) to the commit they apply against. -->
+			     API-31 input, API-29 choreographer and API-30 window-insets/IME APIs,
+			     and fetches the clipboard manager from a not-yet-bound activity context;
+			     these patches add pre-31/30/29 fallbacks and lazy clipboard init.
+			     gtk.wrap is pinned (in android.yml) to the commit they apply against. -->
 			<patch>android-input-jni</patch>
 			<patch>android-choreographer-fallback</patch>
 			<patch>android-clipboard-lazy-manager</patch>
+			<patch>android-window-insets-pre30</patch>
 		</gtk>
 		<libadwaita/>
 	</dependencies>

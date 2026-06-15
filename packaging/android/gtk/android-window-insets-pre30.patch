@@ -1,0 +1,132 @@
+From 7def3ba8087f3f25661baa8007e07dd8d3f10759 Mon Sep 17 00:00:00 2001
+From: Ampernic <ampernic@inbox.ru>
+Date: Mon, 15 Jun 2026 12:24:57 +0300
+Subject: [PATCH] gdk/android: provide pre-30 fallbacks for the window-insets
+ glue
+
+ToplevelActivity called setDecorFitsSystemWindows (API 30),
+WindowInsetsController (getInsetsController/getWindowInsetsController,
+setSystemBarsAppearance/behavior, API 30) and IME show/hide via the
+controller unconditionally, so it threw NoSuchMethodError on Android 8-9
+(the first one aborts every launch in onCreate). Gate each on SDK_INT >= R
+and fall back below 30 to the deprecated systemUiVisibility flags and
+InputMethodManager show/hideSoftInput.
+---
+ .../org/gtk/android/ToplevelActivity.java     | 78 ++++++++++++++-----
+ 1 file changed, 60 insertions(+), 18 deletions(-)
+
+diff --git a/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java b/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
+index 09889b9..33fce26 100644
+--- a/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
++++ b/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
+@@ -145,14 +145,25 @@ public class ToplevelActivity extends Activity {
+ 					boolean imeKeyboardState = queuedImeKeyboardState > 0;
+ 					queuedImeKeyboardState = 0;
+ 					runOnUiThread(() -> {
+-						WindowInsetsController controller = getWindowInsetsController();
+-						if (imeKeyboardState) {
+-							requestFocus();
+-							if (controller != null)
+-								controller.show(WindowInsets.Type.ime());
+-						 } else if (controller != null) {
+-							controller.hide(WindowInsets.Type.ime());
+-						 }
++						if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++							WindowInsetsController controller = getWindowInsetsController();
++							if (imeKeyboardState) {
++								requestFocus();
++								if (controller != null)
++									controller.show(WindowInsets.Type.ime());
++							 } else if (controller != null) {
++								controller.hide(WindowInsets.Type.ime());
++							 }
++						} else {
++							InputMethodManager imm = getContext().getSystemService(InputMethodManager.class);
++							if (imeKeyboardState) {
++								requestFocus();
++								if (imm != null)
++									imm.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT);
++							} else if (imm != null) {
++								imm.hideSoftInputFromWindow(getWindowToken(), 0);
++							}
++						}
+ 					});
+ 				});
+ 			}
+@@ -438,7 +449,14 @@ public class ToplevelActivity extends Activity {
+ 
+ 		super.onCreate(savedInstanceState);
+ 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER);
+-		getWindow().setDecorFitsSystemWindows(false);
++		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++			getWindow().setDecorFitsSystemWindows(false);
++		} else {
++			getWindow().getDecorView().setSystemUiVisibility(
++					View.SYSTEM_UI_FLAG_LAYOUT_STABLE
++					| View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
++					| View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
++		}
+ 
+ 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+ 			this.defaultBack = new OnBackInvokedCallback() {
+@@ -556,7 +574,6 @@ public class ToplevelActivity extends Activity {
+ 	public void postWindowConfiguration(int color, boolean fullscreen) {
+ 		runOnUiThread(() -> {
+ 			Window window = getWindow();
+-			WindowInsetsController controller = window.getInsetsController();
+ 
+ 			view.setBackgroundColor(color);
+ 			// Taken from SO: https://stackoverflow.com/a/3943023
+@@ -565,16 +582,41 @@ public class ToplevelActivity extends Activity {
+ 			                   ((color >>  8) & 0xFF) * 0.587 +
+ 			                   ((color >>  0) & 0xFF) * 0.114) > 186;
+ 
+-			int bars = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+-			controller.setSystemBarsAppearance(dark_fg ? bars : 0, bars);
+-
+ 			this.fullscreenState = fullscreen;
+-			if (fullscreen) {
+-				controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+-				controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
++			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++				WindowInsetsController controller = window.getInsetsController();
++
++				int bars = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
++				controller.setSystemBarsAppearance(dark_fg ? bars : 0, bars);
++
++				if (fullscreen) {
++					controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
++					controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
++				} else {
++					controller.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
++					controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
++				}
+ 			} else {
+-				controller.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+-				controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
++				// Pre-30 (API 26-29): the WindowInsetsController API is unavailable;
++				// drive the system bars through the deprecated systemUiVisibility flags.
++				View decor = window.getDecorView();
++				int vis = decor.getSystemUiVisibility();
++
++				int light = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
++				if (dark_fg)
++					vis |= light;
++				else
++					vis &= ~light;
++
++				int immersive = View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
++						| View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
++						| View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
++				if (fullscreen)
++					vis |= immersive;
++				else
++					vis &= ~(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
++
++				decor.setSystemUiVisibility(vis);
+ 			}
+ 			updateToplevelState();
+ 		});
+-- 
+2.50.1
+
