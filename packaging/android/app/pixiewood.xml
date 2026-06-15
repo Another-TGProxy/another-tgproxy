@@ -34,6 +34,7 @@
 			<patch>android-clipboard-lazy-manager</patch>
 			<patch>android-window-insets-pre30</patch>
 			<patch>android-vulkan-procaddr-pre28</patch>
+			<patch>android-vulkan-backend</patch>
 		</gtk>
 		<libadwaita/>
 	</dependencies>
