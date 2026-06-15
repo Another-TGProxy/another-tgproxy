@@ -1,6 +1,6 @@
-From 844960c9bb0cb018efe643868b95c6b49a60906b Mon Sep 17 00:00:00 2001
+From f0e73f21443c03526f908c4411abebcfd27bbef2 Mon Sep 17 00:00:00 2001
 From: Ampernic <ampernic@inbox.ru>
-Date: Mon, 15 Jun 2026 08:19:21 +0300
+Date: Mon, 15 Jun 2026 09:02:18 +0300
 Subject: [PATCH 1/2] gdk/android: read input events via JNI so the backend
  works below API 31
 
@@ -9,21 +9,23 @@ __INTRODUCED_IN(31) and were called unconditionally, so gdk-android could
 neither build nor run below Android 12 (API 31).
 
 Wrap the event in a small GdkAndroidInputEvent accessor: on API 31+ it
-holds the native AInputEvent* (obtained under __builtin_available); below
-31 it holds the Java MotionEvent/KeyEvent and every field is read through
-the matching JNI method (getX/getAction/..., cached in the refcache). The
-AInputEvent_* getters are baseline (API 9-14) and stay in use on the
-native path, so API 31+ behaviour is unchanged. Time accessors normalise
-to nanoseconds (the Java methods return milliseconds) so the call sites
-are untouched.
+holds the native AInputEvent* (used only when android_get_device_api_level()
+>= 31); below 31 it holds the Java MotionEvent/KeyEvent and every field is
+read through the matching JNI method (getX/getAction/..., cached in the
+refcache). The AInputEvent_* getters are baseline (API 9-14) and stay in use
+on the native path, so API 31+ behaviour is unchanged. Time accessors
+normalise to nanoseconds (the Java methods return milliseconds) so the call
+sites are untouched. The API-31-only calls are runtime-gated and their
+unguarded-availability diagnostic is locally suppressed (the symbols are
+weak-imported, so dlopen still succeeds below 31).
 ---
- gdk/android/gdkandroidevents-private.h |  29 ++++
- gdk/android/gdkandroidevents.c         | 226 ++++++++++++++++++++-----
+ gdk/android/gdkandroidevents-private.h |  29 +++
+ gdk/android/gdkandroidevents.c         | 244 +++++++++++++++++++++----
  gdk/android/gdkandroidinit-private.h   |  25 +++
  gdk/android/gdkandroidinit.c           |  25 +++
  gdk/android/gdkandroidseat-private.h   |   6 +-
  gdk/android/gdkandroidseat.c           |  12 +-
- 6 files changed, 276 insertions(+), 47 deletions(-)
+ 6 files changed, 293 insertions(+), 48 deletions(-)
 
 diff --git a/gdk/android/gdkandroidevents-private.h b/gdk/android/gdkandroidevents-private.h
 index c685b1a..39e2963 100644
@@ -70,13 +72,15 @@ index c685b1a..39e2963 100644
  void gdk_android_events_handle_key_event (GdkAndroidSurface *surface, jobject key_event);
  
 diff --git a/gdk/android/gdkandroidevents.c b/gdk/android/gdkandroidevents.c
-index deab53c..01b78a0 100644
+index deab53c..20aa464 100644
 --- a/gdk/android/gdkandroidevents.c
 +++ b/gdk/android/gdkandroidevents.c
-@@ -30,6 +30,142 @@
+@@ -30,6 +30,144 @@
  
  #include "gdkandroidevents-private.h"
  
++#include <android/api-level.h>
++
 +gint32
 +gdk_android_input_get_source (const GdkAndroidInputEvent *e)
 +{
@@ -216,7 +220,7 @@ index deab53c..01b78a0 100644
  static GdkModifierType
  gdk_android_events_meta_to_gdk (gint32 modifiers)
  {
-@@ -86,9 +222,9 @@ gdk_android_events_int_hash (guint32 num)
+@@ -86,9 +224,9 @@ gdk_android_events_int_hash (guint32 num)
  
  #define GDK_ANDROID_TOUCH_EVENT_TYPE_MASK (3) // least significant 2 bits
  static GdkEventType
@@ -228,7 +232,7 @@ index deab53c..01b78a0 100644
    gint32 masked_action = action & AMOTION_EVENT_ACTION_MASK;
    if (masked_action == AMOTION_EVENT_ACTION_POINTER_DOWN ||
        masked_action == AMOTION_EVENT_ACTION_POINTER_UP)
-@@ -128,13 +264,13 @@ gdk_android_events_touch_action_to_gdk (const AInputEvent *event, size_t pointer
+@@ -128,13 +266,13 @@ gdk_android_events_touch_action_to_gdk (const AInputEvent *event, size_t pointer
  static void
  gdk_android_events_emit_button_press (gint32 mask, guint32 state, guint button,
                                        GdkAndroidSurface *surface,
@@ -244,14 +248,18 @@ index deab53c..01b78a0 100644
    g_debug ("Mouse %u event: (%d & %d) %p [%s]: %s", button, mask, state, surface, G_OBJECT_TYPE_NAME (surface), (state & mask) != 0 ? "press" : "release");
    GdkEvent *ev = gdk_button_event_new ((state & mask) != 0 ? GDK_BUTTON_PRESS : GDK_BUTTON_RELEASE,
                                         (GdkSurface *) surface, dev, tool,
-@@ -153,18 +289,20 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+@@ -153,18 +291,24 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
    GdkAndroidDisplay *display = (GdkAndroidDisplay *) gdk_surface_get_display ((GdkSurface *) surface);
  
    JNIEnv *env = gdk_android_get_env ();
 -  const AInputEvent *event = AMotionEvent_fromJava (env, motion_event);
 +  GdkAndroidInputEvent e = { .native = NULL, .env = env, .jevent = motion_event };
-+  if (__builtin_available (android 31, *))
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wunguarded-availability"
++#pragma clang diagnostic ignored "-Wunguarded-availability-new"
++  if (android_get_device_api_level () >= 31)
 +    e.native = AMotionEvent_fromJava (env, motion_event);
++#pragma clang diagnostic pop
  
 -  gint32 masked_action = AMotionEvent_getAction (event) & AMOTION_EVENT_ACTION_MASK;
 -  gint32 src = AInputEvent_getSource (event);
@@ -270,7 +278,7 @@ index deab53c..01b78a0 100644
  
    // Update keyboard focus on motion events only for autohide surfaces
    // This *doesn't really* match the behaviour of Mutter (autohide popups
-@@ -180,37 +318,37 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+@@ -180,37 +324,37 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
    if (GDK_ANDROID_EVENTS_COMPARE_MASK (src, AINPUT_SOURCE_TOUCHSCREEN))
      {
        // I think it might be better to drop the down time and only rely on the event identity
@@ -319,7 +327,7 @@ index deab53c..01b78a0 100644
                                                 FALSE, // how am I supposed to know if the current scroll event is the last?
                                                 GDK_SCROLL_UNIT_WHEEL,
                                                 GDK_SCROLL_RELATIVE_DIRECTION_UNKNOWN);
-@@ -223,26 +361,26 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+@@ -223,26 +367,26 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
            // button up event, as GDK does not
            // provide a cancel mechanism for
            // button events.
@@ -351,7 +359,7 @@ index deab53c..01b78a0 100644
                                                        time, mods,
                                                        x, y);
  
-@@ -257,7 +395,7 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+@@ -257,7 +401,7 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
                                                     time, mods,
                                                     GDK_BUTTON_PRIMARY,
                                                     x, y,
@@ -360,7 +368,7 @@ index deab53c..01b78a0 100644
                gdk_android_seat_consume_event ((GdkDisplay *) display, ev);
  
                // this will cause conflicts in cases where the mouse/touchpad and
-@@ -291,28 +429,28 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+@@ -291,28 +435,28 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
                 masked_action == AMOTION_EVENT_ACTION_HOVER_MOVE)
          {
            GdkDeviceTool *tool = gdk_android_seat_get_device_tool (display->seat,
@@ -394,7 +402,7 @@ index deab53c..01b78a0 100644
                                                    time, mods,
                                                    x, y);
            const guint update_mask = AMOTION_EVENT_BUTTON_STYLUS_PRIMARY | AMOTION_EVENT_BUTTON_STYLUS_SECONDARY;
-@@ -355,7 +493,7 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+@@ -355,7 +499,7 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
        for (gsize i = 0; i < G_N_ELEMENTS (pad_axes); i++)
          {
            gdouble value;
@@ -403,34 +411,42 @@ index deab53c..01b78a0 100644
              { // the value != 0. check is less than ideal, as 0 is a legitimate value, but
                // android also returns 0 when the finger leaves the ring (and often just
                // randomly too)
-@@ -369,7 +507,11 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
+@@ -369,7 +513,14 @@ gdk_android_events_handle_motion_event (GdkAndroidSurface *surface,
        (*env)->PopLocalFrame (env, NULL);
      }
  
 -  AInputEvent_release (event);
 +  if (e.native)
 +    {
-+      if (__builtin_available (android 31, *))
-+        AInputEvent_release (e.native);
++      #pragma clang diagnostic push
++      #pragma clang diagnostic ignored "-Wunguarded-availability"
++      #pragma clang diagnostic ignored "-Wunguarded-availability-new"
++      AInputEvent_release (e.native);
++      #pragma clang diagnostic pop
 +    }
  }
  
  void
-@@ -379,9 +521,11 @@ gdk_android_events_handle_key_event (GdkAndroidSurface *surface,
+@@ -379,9 +530,15 @@ gdk_android_events_handle_key_event (GdkAndroidSurface *surface,
    GdkAndroidDisplay *display = (GdkAndroidDisplay *) gdk_surface_get_display ((GdkSurface *) surface);
  
    JNIEnv *env = gdk_android_get_env ();
 -  const AInputEvent *event = AKeyEvent_fromJava (env, key_event);
-+  GdkAndroidInputEvent e = { .native = NULL, .env = env, .jevent = key_event };
-+  if (__builtin_available (android 31, *))
-+    e.native = AKeyEvent_fromJava (env, key_event);
- 
+-
 -  gint32 action = AKeyEvent_getAction (event);
++  GdkAndroidInputEvent e = { .native = NULL, .env = env, .jevent = key_event };
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wunguarded-availability"
++#pragma clang diagnostic ignored "-Wunguarded-availability-new"
++  if (android_get_device_api_level () >= 31)
++    e.native = AKeyEvent_fromJava (env, key_event);
++#pragma clang diagnostic pop
++
 +  gint32 action = gdk_android_key_get_action (&e);
    // The AKeyState enum values UP and DOWN are actually inversed
    // when the key is depressed the keystate is 0 (UP), while the
    // keystate becomes 1 (DOWN) once the key was released again.
-@@ -390,12 +534,12 @@ gdk_android_events_handle_key_event (GdkAndroidSurface *surface,
+@@ -390,12 +547,12 @@ gdk_android_events_handle_key_event (GdkAndroidSurface *surface,
    GdkDevice *dev = gdk_seat_get_keyboard ((GdkSeat *) display->seat);
    gdk_android_device_keyboard_maybe_update_surface_focus ((GdkAndroidDevice *) dev, surface);
  
@@ -446,15 +462,18 @@ index deab53c..01b78a0 100644
  
    if (keycode >= AKEYCODE_BUTTON_1 && keycode <= AKEYCODE_BUTTON_16)
      {
-@@ -423,5 +567,9 @@ gdk_android_events_handle_key_event (GdkAndroidSurface *surface,
+@@ -423,5 +580,12 @@ gdk_android_events_handle_key_event (GdkAndroidSurface *surface,
                                      &translated, &translated, NULL);
    gdk_android_seat_consume_event ((GdkDisplay *) display, ev);
  cleanup:
 -  AInputEvent_release (event);
 +  if (e.native)
 +    {
-+      if (__builtin_available (android 31, *))
-+        AInputEvent_release (e.native);
++      #pragma clang diagnostic push
++      #pragma clang diagnostic ignored "-Wunguarded-availability"
++      #pragma clang diagnostic ignored "-Wunguarded-availability-new"
++      AInputEvent_release (e.native);
++      #pragma clang diagnostic pop
 +    }
  }
 diff --git a/gdk/android/gdkandroidinit-private.h b/gdk/android/gdkandroidinit-private.h
