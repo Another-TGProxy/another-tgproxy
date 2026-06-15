@@ -43,6 +43,10 @@
 			<!-- gdk-pixbuf's Android ImageDecoder loader needs API 30/31; disable it for
 			     our minSdk-26 build. SVG icons load via the rsvg loader, raster via GTK4. -->
 			<option>-Dgdk-pixbuf:android=disabled</option>
+			<!-- GTK4's Vulkan renderer links Vulkan 1.1 (vkGetPhysicalDeviceProperties2
+			     & co.), which libvulkan only exports from API 28. Disable it for the
+			     minSdk-26 build; GTK falls back to the GL (GLES) renderer. -->
+			<option>-Dgtk:vulkan=disabled</option>
 		</configure-options>
 		<architectures>
 			<arch>aarch64</arch>
