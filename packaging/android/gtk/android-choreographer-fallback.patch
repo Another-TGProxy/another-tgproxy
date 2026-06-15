@@ -1,15 +1,14 @@
-From 5c9d87a85d292debadcfa04972076ed1704ed1a9 Mon Sep 17 00:00:00 2001
+From a461a4288d9e81950b444cc28c174f4354471242 Mon Sep 17 00:00:00 2001
 From: Ampernic <ampernic@inbox.ru>
-Date: Mon, 15 Jun 2026 09:02:18 +0300
+Date: Mon, 15 Jun 2026 10:22:26 +0300
 Subject: [PATCH 2/2] gdk/android: fall back to
  AChoreographer_postFrameCallback below API 29
 
 AChoreographer_postFrameCallback64 is __INTRODUCED_IN(29) and was called
 unconditionally, crashing on API 26-28. Gate it on android_get_device_api_level()
 and fall back to the deprecated AChoreographer_postFrameCallback (API 24); its
-callback takes `long`, which on arm64/x86_64 (our ABIs) is 64-bit, so the
-int64_t frame callback is ABI-compatible. The unguarded-availability diagnostic
-is locally suppressed; the symbol is weak-imported.
+callback takes `long`, 64-bit on arm64/x86_64, so the int64_t frame callback is
+ABI-compatible. Diagnostic locally suppressed; the symbol is weak-imported.
 ---
  gdk/android/gdkandroidchoreographersource.c | 41 ++++++++++++++++++---
  1 file changed, 35 insertions(+), 6 deletions(-)
