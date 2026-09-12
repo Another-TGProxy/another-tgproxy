@@ -33,6 +33,26 @@ namespace TgWsProxy {
                 default: return WINDOW;
             }
         }
+
+        public string label () {
+            switch (this) {
+                case WINDOW: return _("Window");
+                case TRAY: return _("Tray");
+                case BACKGROUND_PORTAL: return _("Background");
+                case QUICK_SETTINGS: return _("Quick Settings");
+                case NOTIFICATION: return _("Notification");
+                default: return _("Window");
+            }
+        }
+    }
+
+    // Fill a toggle group with the status modes this platform actually offers
+    // (no greyed-out choices) and pre-select the resolved preference. Shared by
+    // Settings and the setup wizard so the two can't drift apart.
+    public void fill_mode_toggles (Adw.ToggleGroup group, Platform p, string pref) {
+        foreach (var m in p.available_modes ())
+            group.add (new Adw.Toggle () { name = m.id (), label = m.label () });
+        group.active_name = p.resolve (pref).id ();
     }
 
     // Runtime detection of OS / desktop / delivery, and which status modes work here.

@@ -87,21 +87,9 @@ namespace TgWsProxy {
         }
 
         private void setup_status_modes () {
-            var p = Platform.get_default ();
-            // Only available modes appear at all (no greyed-out toggles).
-            add_mode_toggle ("window", _("Window"), true);
-            add_mode_toggle ("tray", _("Tray"), p.tray_available ());
-            add_mode_toggle ("background", _("Background"), p.background_portal_available ());
-            add_mode_toggle ("quicksettings", _("Quick Settings"), p.quick_settings_available ());
-
-            status_mode_group.active_name = p.resolve (cfg.status_mode).id ();
+            fill_mode_toggles (status_mode_group, Platform.get_default (), cfg.status_mode);
             update_text_visibility ();
             status_mode_group.notify["active-name"].connect (update_text_visibility);
-        }
-
-        private void add_mode_toggle (string name, string label, bool available) {
-            if (!available) return;
-            status_mode_group.add (new Adw.Toggle () { name = name, label = label });
         }
 
         private void update_text_visibility () {

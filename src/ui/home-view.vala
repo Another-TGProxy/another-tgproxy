@@ -74,8 +74,7 @@ namespace TgWsProxy {
                     s.conn_active, s.conn_total,
                     human_bytes (s.bytes_up), human_bytes (s.bytes_down));
             if (s.secret.length == 32) {
-                current_link = "tg://proxy?server=%s&port=%d&secret=dd%s".printf (
-                    s.host, s.port, s.secret);
+                current_link = proxy_link (s.host, s.port, s.secret);
                 link_row.subtitle = current_link;
             }
             start_btn.sensitive = !r;

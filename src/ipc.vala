@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 namespace TgWsProxy {
 
+    // The tg:// link a client uses to add this proxy. The "dd" prefix marks the
+    // secret as the random-padded form. Callers must check the secret is 32 hex
+    // chars first; a link built from a half-written one is worse than none.
+    public string proxy_link (string host, int port, string secret) {
+        return "tg://proxy?server=%s&port=%d&secret=dd%s".printf (host, port, secret);
+    }
+
     // A status snapshot pushed by the daemon over the control channel.
     public class Status : Object {
         public bool running = false;

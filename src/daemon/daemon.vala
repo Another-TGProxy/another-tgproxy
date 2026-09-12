@@ -138,8 +138,7 @@ namespace TgWsProxy {
         void open_telegram () {
             var cfg = runner.cfg;
             if (cfg.secret.length != 32) return;
-            var uri = "tg://proxy?server=%s&port=%d&secret=dd%s".printf (
-                cfg.host, cfg.port, cfg.secret);
+            var uri = proxy_link (cfg.host, cfg.port, cfg.secret);
             try {
                 Station.open_uri (uri);
             } catch (Error e) {
