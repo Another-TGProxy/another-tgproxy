@@ -2,7 +2,7 @@
 # mtproxy-ws engine. Build-depends on the installed `mtproxy-ws` package
 # (pkg-config + the bundled vala binding); build/install core first.
 project('another-tgproxy', ['c', 'vala'],
-  version: '2.1.0',
+  version: '2.2.0',
   meson_version: '>= 0.62',
   default_options: ['warning_level=2'],
   license: 'GPL-3.0-or-later',
