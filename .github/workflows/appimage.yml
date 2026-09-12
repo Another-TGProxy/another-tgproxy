@@ -96,8 +96,9 @@ jobs:
       # not check for updates and drew broken icons, so the build fails on them now.
       - name: Check the bundle is complete
         run: |
-          tls=$(ls AppDir/shared/lib/gio/modules/libgio{gnutls,openssl}.so 2>/dev/null | wc -l)
-          [ "$tls" -gt 0 ] || { echo "::error::no GIO TLS backend bundled — HTTPS (the update check) would fail"; exit 1; }
+          # The container has no bash, so this runs under dash: no brace expansion.
+          ls AppDir/shared/lib/gio/modules/ 2>/dev/null | grep -qE '^libgio(gnutls|openssl)\.so$' \
+            || { echo "::error::no GIO TLS backend bundled — HTTPS (the update check) would fail"; exit 1; }
           ls AppDir/shared/lib/gdk-pixbuf-2.0/*/loaders/*svg* >/dev/null 2>&1 \
             || { echo "::error::no SVG pixbuf loader bundled — symbolic icons would not render"; exit 1; }
           [ -f AppDir/usr/share/icons/Adwaita/index.theme ] \

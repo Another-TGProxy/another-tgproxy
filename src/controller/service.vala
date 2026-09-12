@@ -50,8 +50,9 @@ namespace TgWsProxy {
             // No D-Bus activation on Windows; the same .exe re-runs in --daemon
             // mode as an independent process (it outlives this GUI on its own).
             try {
-                new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE,
-                                daemon_exec (), "--daemon");
+                var sp = new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_PIPE,
+                                         daemon_exec (), "--daemon");
+                watch_daemon.begin (sp);
                 verify_started.begin ();
             } catch (Error e) {
                 failed (_("Failed to start the service: %s").printf (e.message));
@@ -82,6 +83,7 @@ namespace TgWsProxy {
 #endif
         }
 
+#if !WINDOWS
         // Whether the D-Bus service that would be activated for DAEMON_ID is the
         // one shipped with this binary. The first match along XDG_DATA_HOME +
         // XDG_DATA_DIRS is the one dbus-daemon uses, so only that one is checked.
@@ -110,6 +112,7 @@ namespace TgWsProxy {
             }
             return false;   // nothing installed: spawning ourselves is the only way
         }
+#endif
 
         // True if something is already listening on the configured proxy address.
         bool proxy_port_in_use () {
