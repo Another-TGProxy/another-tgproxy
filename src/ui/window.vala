@@ -8,6 +8,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.Banner conn_banner;
         [GtkChild] private unowned Adw.Banner err_banner;
         [GtkChild] private unowned Adw.Banner update_banner;
+        [GtkChild] private unowned Adw.Banner badhs_banner;
         [GtkChild] private unowned HomeView home_view;
         [GtkChild] private unowned SettingsView settings_view;
         [GtkChild] private unowned LogView log_view;
@@ -60,9 +61,15 @@ namespace TgWsProxy {
             log_view.start ();
             home_view.toast.connect ((m) => { toast (m); });
             settings_view.toast.connect ((m) => { toast (m); });
+            settings_view.setup_requested.connect (() => run_setup (true));
 
             conn_banner.button_clicked.connect (() => service.start ());
             err_banner.button_clicked.connect (open_error_details);
+            badhs_banner.button_clicked.connect (() => {
+                if (badhs_link == "") return;
+                get_clipboard ().set_text (badhs_link);
+                toast (_("Link copied"));
+            });
             client.connection_changed.connect (on_connection);
             client.status_changed.connect (on_status);
             service.failed.connect (present_error);
@@ -456,6 +463,31 @@ namespace TgWsProxy {
                 present_error (s.error);
             else
                 err_banner.revealed = false;
+            check_bad_handshakes (s);
+        }
+
+        // Refusals only mean something while they keep coming: a handful is a
+        // client that has just been re-pointed, a steady stream is one still
+        // configured with a secret this proxy no longer accepts.
+        private const int64 BADHS_WARN_RATE = 20;
+        private int64 badhs_seen = -1;
+        private string badhs_link = "";
+
+        private void check_bad_handshakes (Status s) {
+            int64 prev = badhs_seen;
+            badhs_seen = s.bad_handshakes;
+            if (prev < 0 || s.bad_handshakes < prev) // first sample, or daemon restarted
+                return;
+            if (s.bad_handshakes - prev < BADHS_WARN_RATE) {
+                badhs_banner.revealed = false;
+                return;
+            }
+            badhs_link = (s.secret.length == 32)
+                ? proxy_link (s.host, s.port, s.secret) : "";
+            badhs_banner.button_label = (badhs_link != "") ? _("Copy link") : "";
+            badhs_banner.title =
+                _("Another client keeps connecting with an outdated secret. Re-add the proxy there.");
+            badhs_banner.revealed = true;
         }
 
         // Show errors briefly in the banner; the full text (which can be long or

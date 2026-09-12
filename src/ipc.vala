@@ -18,6 +18,8 @@ namespace TgWsProxy {
         public int64 conn_active = 0;
         public int64 bytes_up = 0;
         public int64 bytes_down = 0;
+        // Connections refused at the handshake: a client with an outdated secret.
+        public int64 bad_handshakes = 0;
         public string error = "";
 
         // Expand a status template ({active} {total} {up} {down} {host} {port}).
@@ -48,6 +50,7 @@ namespace TgWsProxy {
             b.set_member_name ("active"); b.add_int_value (conn_active);
             b.set_member_name ("up"); b.add_int_value (bytes_up);
             b.set_member_name ("down"); b.add_int_value (bytes_down);
+            b.set_member_name ("badhs"); b.add_int_value (bad_handshakes);
             b.end_object ();
             b.end_object ();
             var gen = new Json.Generator ();
@@ -75,6 +78,7 @@ namespace TgWsProxy {
                     if (st.has_member ("active")) s.conn_active = st.get_int_member ("active");
                     if (st.has_member ("up")) s.bytes_up = st.get_int_member ("up");
                     if (st.has_member ("down")) s.bytes_down = st.get_int_member ("down");
+                    if (st.has_member ("badhs")) s.bad_handshakes = st.get_int_member ("badhs");
                 }
                 return s;
             } catch (Error e) {

@@ -80,6 +80,7 @@ namespace TgWsProxy {
                 s.conn_active = engine.connections_active ();
                 s.bytes_up = engine.bytes_up ();
                 s.bytes_down = engine.bytes_down ();
+                s.bad_handshakes = engine.bad_handshakes ();
             }
             return s;
         }

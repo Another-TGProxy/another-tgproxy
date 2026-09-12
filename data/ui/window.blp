@@ -56,6 +56,15 @@ template $TgWsProxyWindow : Adw.ApplicationWindow {
         revealed: false;
       }
 
+      // Someone keeps connecting with a secret this proxy no longer uses — a
+      // second client left on an old link. The engine throttles it; only the
+      // user can re-add the proxy there.
+      [top]
+      Adw.Banner badhs_banner {
+        button-label: _("Copy link");
+        revealed: false;
+      }
+
       content: Adw.ViewStack stack {
         Adw.ViewStackPage {
           name: "home";
