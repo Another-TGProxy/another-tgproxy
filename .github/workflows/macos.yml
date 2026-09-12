@@ -26,15 +26,16 @@ permissions:
   contents: write
 
 jobs:
-  # Both Mac architectures from one Apple-Silicon runner: arm64 builds natively;
-  # x86_64 builds under Rosetta against a parallel Intel Homebrew in /usr/local
-  # (the Intel runners are gone and the deps are single-arch, so no universal lipo).
+  # Apple Silicon only. x86_64 used to build on the same runner under Rosetta
+  # against a parallel Intel Homebrew in /usr/local; that stopped working when
+  # Homebrew dropped Intel macOS ("Homebrew on macOS is only supported on Apple
+  # Silicon processors!"), and there are no Intel runners left to fall back to.
   build:
     runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, x86_64]
+        arch: [arm64]
     steps:
       - name: Checkout GUI
         uses: actions/checkout@v6
@@ -65,32 +66,6 @@ jobs:
         env:
           RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: bash packaging/macos/bundle-macos.sh
-
-      # ---- x86_64: Rosetta + Intel Homebrew (/usr/local), whole build emulated ----
-      - name: Install Rosetta + Intel Homebrew (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: |
-          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ENV_HINTS=1
-          sudo softwareupdate --install-rosetta --agree-to-license
-          arch -x86_64 /bin/bash -c 'export NONINTERACTIVE=1; /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-          arch -x86_64 /usr/local/bin/brew update --quiet || true
-          # `|| true`: a non-fatal link conflict on an unrelated dep (the runner
-          # already has python in /usr/local) must not abort; the libs we link
-          # against still pour, and the build step surfaces any real miss.
-          arch -x86_64 /usr/local/bin/brew install \
-            meson ninja pkg-config \
-            vala blueprint-compiler \
-            gtk4 libadwaita json-glib glib-networking \
-            openssl@3 gettext \
-            adwaita-icon-theme librsvg \
-            dylibbundler create-dmg desktop-file-utils || true
-
-      - name: Build app + bundle .app/.dmg (x86_64 under Rosetta)
-        if: matrix.arch == 'x86_64'
-        env:
-          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-        run: |
-          arch -x86_64 /bin/bash -c 'export PATH=/usr/local/bin:$PATH RELEASE_VERSION='"'$RELEASE_VERSION'"'; bash packaging/macos/bundle-macos.sh'
 
       - name: Upload DMG
         uses: actions/upload-artifact@v7
