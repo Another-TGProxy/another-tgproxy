@@ -22,6 +22,8 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.StatusPage update_status;
         [GtkChild] private unowned Gtk.Button notes_btn;
         [GtkChild] private unowned Gtk.Button skip_update_btn;
+        [GtkChild] private unowned Gtk.ProgressBar dl_bar;
+        [GtkChild] private unowned Adw.StatusPage install_status;
         [GtkChild] private unowned Adw.StatusPage connection_page;
 #if ANDROID
         [GtkChild] private unowned Adw.StatusPage autostart_page;
@@ -77,13 +79,14 @@ namespace TgWsProxy {
             drop_pointless_steps ();
             collect_pages ();
 
-            skip_btn.clicked.connect (skip);
             regen_btn.clicked.connect (() => { secret_row.text = Config.gen_secret (); });
             secret_row.notify["text"].connect (update_nav);
             back_btn.clicked.connect (() => go (-1));
             next_btn.clicked.connect (() => {
                 if (finished ()) { clear_timer (); force_close (); }
+                else if (installing_update ()) quit_app ();
                 else if (offering_update ()) update_requested ();
+                else if (announcing_update ()) skip_this_version ();
                 else go (1);
             });
             steps.notify["visible-child"].connect (update_nav);
@@ -97,7 +100,8 @@ namespace TgWsProxy {
                 double ay = (vy < 0) ? -vy : vy;
                 if (ax < 200 || ax < ay) return;   // too slow, or a vertical scroll
                 if (vx < 0) {
-                    if (!finished () && !offering_update () && step_ready (current ()))
+                    if (!finished () && !offering_update () && !installing_update ()
+                        && !downloading_update () && step_ready (current ()))
                         go (1);
                 } else {
                     go (-1);
@@ -240,10 +244,12 @@ namespace TgWsProxy {
             }
             update_version = version;
             update_notes = notes;
-            update_status.description =
-                _("Version %s is ready to install.").printf (version);
+            update_status.description = Platform.get_default ().updates_installable ()
+                ? _("Version %s is ready to install.").printf (version)
+                : _("Version %s has been released. It installs through the repository this app came from.").printf (version);
             update_stack.visible_child_name = "available";
             notes_btn.visible = notes != "";
+            skip_update_btn.visible = Platform.get_default ().updates_installable ();
             update_nav ();
         }
 
@@ -276,12 +282,96 @@ namespace TgWsProxy {
         }
 
         // True while the update step is actually offering something to install:
-        // there the primary button installs instead of moving on.
+        // there the primary button installs instead of moving on. Where a
+        // repository installs the app the step only announces the release, so the
+        // button stays "Next".
         private bool offering_update () {
             int idx = current ();
             return idx < pages.length
                 && pages[idx] == update_stack
-                && update_stack.visible_child_name == "available";
+                && update_stack.visible_child_name == "available"
+                && Platform.get_default ().updates_installable ();
+        }
+
+        private bool checking_update () {
+            int idx = current ();
+            return idx < pages.length
+                && pages[idx] == update_stack
+                && update_stack.visible_child_name == "checking";
+        }
+
+        private bool downloading_update () {
+            int idx = current ();
+            return idx < pages.length
+                && pages[idx] == update_stack
+                && update_stack.visible_child_name == "downloading";
+        }
+
+        // The installer has the file: whatever the wizard would ask next is a
+        // question for the new version, which starts its own wizard.
+        // The release exists but a repository installs it: nothing to press here
+        // except "not this one", so that moves down to the primary button.
+        private bool announcing_update () {
+            int idx = current ();
+            return idx < pages.length
+                && pages[idx] == update_stack
+                && update_stack.visible_child_name == "available"
+                && !Platform.get_default ().updates_installable ();
+        }
+
+        private void skip_this_version () {
+            if (update_version != "") {
+                cfg.skipped_version = update_version;
+                cfg.save ();
+            }
+            go (1);
+        }
+
+        private bool installing_update () {
+            int idx = current ();
+            return idx < pages.length
+                && pages[idx] == update_stack
+                && update_stack.visible_child_name == "installing";
+        }
+
+        private void quit_app () {
+            var app = (get_root () as Gtk.Window)?.application;
+            if (app != null) app.quit ();
+        }
+
+        // The window owns the updater and the install; it downloads on our behalf
+        // and drives these, so the offer is not repeated in a dialog on top of a
+        // step that just made the same offer.
+        public void download_started () {
+            dl_bar.fraction = 0;
+            dl_bar.text = "";
+            update_stack.visible_child_name = "downloading";
+            update_nav ();
+        }
+
+        public void download_progress (double frac) {
+            if (frac < 0) {
+                dl_bar.pulse ();
+                return;
+            }
+            dl_bar.fraction = frac;
+            dl_bar.text = "%d %%".printf ((int) (frac * 100));
+        }
+
+        // Platforms that restart into the installer never get here; the ones that
+        // hand the file over (macOS, Android's package installer) do, and the step
+        // has to lead somewhere after that. The window words it: it knows how this
+        // delivery installs.
+        public void download_finished (string hint) {
+            install_status.description = hint;
+            update_stack.visible_child_name = "installing";
+            update_nav ();
+        }
+
+        public void download_failed (string reason) {
+            update_stack.visible_child_name = "available";
+            update_nav ();
+            toast (_("Download failed: %s").printf (reason));
         }
 
         // The proxy is up and the link is on screen: the primary button becomes
@@ -301,23 +391,22 @@ namespace TgWsProxy {
             back_revealer.reveal_child = idx > 0 && !last;
             // On the final page the button only appears once there's an outcome
             // worth acting on; while applying or on error the page speaks for itself.
-            next_btn.visible = !last || finished ();
-            next_btn.sensitive = step_ready (idx);
+            // While the check is still running there is nothing to decide yet, and
+            // a visible Next is too easy to hit past the step.
+            next_btn.visible = (!last || finished ()) && !checking_update ();
+            next_btn.sensitive = step_ready (idx) && !downloading_update ();
             if (finished ())
                 next_btn.label = _("Start using");
+            else if (installing_update ())
+                next_btn.label = _("Quit");
             else if (offering_update ())
                 next_btn.label = _("Update now");
+            else if (announcing_update ())
+                next_btn.label = _("Skip, I know what I'm doing");
+            else if (downloading_update ())
+                next_btn.label = _("Downloading…");
             else
                 next_btn.label = (idx == pages.length - 2) ? _("Finish") : _("Next");
-        }
-
-        // Skipping is a decision: don't ask again. Closing the dialog outright is
-        // not, so setup_done stays false and the wizard returns next launch.
-        private void skip () {
-            cfg.setup_done = true;
-            cfg.save ();
-            clear_timer ();
-            force_close ();
         }
 
         private void apply () {

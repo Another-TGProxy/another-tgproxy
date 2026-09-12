@@ -49,8 +49,6 @@ namespace TgWsProxy {
             verbose_row.active = cfg.verbose;
             autostart_row.active = service.is_autostart ();
             updates_row.active = cfg.check_updates;
-            updates_row.visible = Platform.get_default ().updates_relevant ();
-            channel_row.visible = Platform.get_default ().updates_relevant ();
             var ch = cfg.update_channel;
             if (ch == "") ch = Build.VERSION.contains ("-") ? "beta" : "stable";
             channel_row.selected = (ch == "beta") ? 1 : 0;

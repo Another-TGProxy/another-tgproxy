@@ -160,17 +160,25 @@ namespace TgWsProxy {
             return false;
         }
 
-        // In-app update notification is meaningful only where no repository manages
-        // the app: Windows, macOS, Android and the Linux AppImage. Native and
-        // Flatpak Linux update through their repos, so it's skipped there.
-        public bool updates_relevant () {
-            if (os == OsKind.WINDOWS || os == OsKind.MACOS)
-                return true;
+        // Which release asset this copy of the app updates with, and therefore how
+        // it installs one. NONE means a repository manages the app (native and
+        // Flatpak Linux), so there is nothing to offer and nothing to download.
+        public UpdateKind update_kind () {
 #if ANDROID
-            return true;
+            return UpdateKind.ANDROID_APK;
 #else
-            return os == OsKind.LINUX && delivery == DeliveryKind.APPIMAGE;
+            if (os == OsKind.WINDOWS)
+                return UpdateKind.WINDOWS_SETUP;
+            if (os == OsKind.MACOS)
+                return UpdateKind.MACOS_DMG;
+            if (os == OsKind.LINUX && delivery == DeliveryKind.APPIMAGE)
+                return UpdateKind.APPIMAGE;
+            return UpdateKind.NONE;
 #endif
+        }
+
+        public bool updates_installable () {
+            return update_kind () != UpdateKind.NONE;
         }
 
         public StatusMode[] available_modes () {

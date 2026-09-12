@@ -85,13 +85,13 @@ namespace TgWsProxy {
                 u.check ();
         }
 
-        // Build the updater for a newer GitHub release where no repo manages
-        // updates (Windows/macOS/Android/AppImage); Native/Flatpak Linux uses its
-        // repo and gets none. Creating it does not check — the wizard drives its
-        // own check on the update step, and the window checks once it's done.
+        // Build the updater for a newer GitHub release. Where a repository installs
+        // the app (native and Flatpak Linux) the release is only announced — see
+        // Platform.updates_installable. Creating it does not check: the wizard drives
+        // its own check on the update step, and the window checks once it's done.
         public Station.Updates? ensure_updater () {
             if (updater != null) return updater;
-            if (cfg.check_updates && Platform.get_default ().updates_relevant ()) {
+            if (cfg.check_updates) {
                 // GitHub releases; downloads are verified against the SHA256SUMS
                 // release asset (libstation resolves the asset URL + checks SHA-256).
                 var schema = new Station.ReleaseSchema.github ();
@@ -127,12 +127,6 @@ namespace TgWsProxy {
             return updater;
         }
 
-        // Entry point for the wizard's "update now": the download/install flow
-        // lives here, so the wizard hands the job over instead of copying it.
-        public void open_update_dialog () {
-            show_update_dialog ();
-        }
-
         // Run the first-run wizard, once. Called after the window is on screen so
         // the dialog has something to attach to.
         private bool setup_active = false;
@@ -141,24 +135,38 @@ namespace TgWsProxy {
 
         public void maybe_run_setup () {
             if (cfg.setup_done) return;
+            run_setup (false);
+        }
+
+        public void run_setup (bool rerun) {
+            if (setup_active) return;
             setup_active = true;
             var wizard = new SetupWizard ();
             wizard.toast.connect ((m) => { toast (m); });
             // Hands its update step our updater, and hands the install back to us.
+            // The download runs in the wizard's own step: popping the update dialog
+            // over it would ask a second time what the step has just asked.
             wizard.update_requested.connect (() => {
-                wizard.release ();
-                open_update_dialog ();
+                // Whatever the closed dialog left behind is not ours to drive.
+                dl_bar = null;
+                dl_btn = null;
+                dl_wizard = wizard;
+                start_download ();
+                if (downloading) wizard.download_started ();
             });
-            wizard.bind (cfg, client, service, ensure_updater ());
+            wizard.bind (cfg, client, service, ensure_updater (), rerun);
             // The wizard is modal and refuses to be dismissed, so closing the
             // window has to tear it down explicitly or the window can't close.
-            this.close_request.connect (() => {
+            ulong close_id = 0;
+            close_id = this.close_request.connect (() => {
                 wizard.release ();
                 return false;
             });
-            // Whatever the outcome — finished, skipped or quit — the update check
-            // is free to run once the wizard is out of the way.
+            // Whatever the outcome — finished or quit — the update check is free
+            // to run once the wizard is out of the way.
             wizard.closed.connect (() => {
+                this.disconnect (close_id);
+                if (dl_wizard == wizard) dl_wizard = null;
                 setup_active = false;
                 update_dialog_suppressed = true;
                 start_update_check ();
@@ -174,6 +182,8 @@ namespace TgWsProxy {
         private Gtk.ProgressBar? dl_bar = null;
         private Gtk.Button? dl_btn = null;
         private bool downloading = false;
+        // Set while the wizard, not the update dialog, is showing the progress.
+        private SetupWizard? dl_wizard = null;
 
         private void on_update_available (string version, string url, string notes) {
             // A version the user turned down stays turned down — no banner, no dialog.
@@ -233,9 +243,19 @@ namespace TgWsProxy {
             });
             var later = new Gtk.Button.with_label (_("Later"));
             later.clicked.connect (() => dlg.close ());
-            dl_btn = new Gtk.Button.with_label (_("Download"));
+            // Nothing to install where a repository owns the app: the offer is the
+            // release page, and updating stays the repository's job.
+            bool installable = Platform.get_default ().updates_installable ();
+            dl_btn = new Gtk.Button.with_label (installable ? _("Download") : _("Release page"));
             dl_btn.add_css_class ("suggested-action");
-            dl_btn.clicked.connect (() => start_download ());
+            dl_btn.clicked.connect (() => {
+                if (installable) {
+                    start_download ();
+                } else {
+                    open_external_uri (this, update_url);
+                    dlg.close ();
+                }
+            });
             actions.append (skip);
             actions.append (later);
             actions.append (dl_btn);
@@ -247,20 +267,27 @@ namespace TgWsProxy {
             dlg.present (this);
         }
 
-        // The release asset for this platform (deterministic from the tag and our
-        // naming scheme) and where to stage it.
+        // The release asset this delivery installs (deterministic from the tag and
+        // our naming scheme) and where to stage it.
         private string asset_filename () {
-#if WINDOWS
-            return "AnotherTGProxy-%s-windows-x86_64-setup.exe".printf (update_version);
-#elif ANDROID
-            return "AnotherTGProxy-%s-android-universal.apk".printf (update_version);
-#elif DARWIN
-            var u = Posix.utsname ();   // the constructor calls uname()
-            var arch = (u.machine == "x86_64") ? "x86_64" : "arm64";
-            return "AnotherTGProxy-%s-macos-%s.dmg".printf (update_version, arch);
+            switch (Platform.get_default ().update_kind ()) {
+            case UpdateKind.WINDOWS_SETUP:
+                return "AnotherTGProxy-%s-windows-x86_64-setup.exe".printf (update_version);
+            case UpdateKind.ANDROID_APK:
+                return "AnotherTGProxy-%s-android-universal.apk".printf (update_version);
+            case UpdateKind.MACOS_DMG:
+#if DARWIN
+                var u = Posix.utsname ();   // the constructor calls uname()
+                var arch = (u.machine == "x86_64") ? "x86_64" : "arm64";
 #else
-            return "AnotherTGProxy-%s-linux-x86_64.AppImage".printf (update_version);
+                var arch = "arm64";
 #endif
+                return "AnotherTGProxy-%s-macos-%s.dmg".printf (update_version, arch);
+            case UpdateKind.APPIMAGE:
+                return "AnotherTGProxy-%s-linux-x86_64.AppImage".printf (update_version);
+            default:
+                return "";
+            }
         }
 
         private string asset_dest () {
@@ -271,12 +298,22 @@ namespace TgWsProxy {
             var dir = Environment.get_user_data_dir ();
 #else
             var dir = Environment.get_tmp_dir ();
+            // The AppImage is replaced in place, so stage the download beside it:
+            // /tmp is usually a tmpfs, and a move off it is a cross-device copy.
+            if (Platform.get_default ().update_kind () == UpdateKind.APPIMAGE) {
+                var cur = Environment.get_variable ("APPIMAGE");
+                if (cur != null && cur != "") {
+                    var beside = Path.get_dirname (cur);
+                    if (Posix.access (beside, Posix.W_OK) == 0)
+                        dir = beside;
+                }
+            }
 #endif
             return Path.build_filename (dir, asset_filename ());
         }
 
         private void start_download () {
-            if (updater == null || downloading)
+            if (updater == null || downloading || asset_filename () == "")
                 return;
             var dest = asset_dest ();
             // The staging dir (e.g. the app's XDG_DATA_HOME on Android) may not
@@ -291,6 +328,8 @@ namespace TgWsProxy {
         }
 
         private void on_dl_progress (double frac) {
+            if (dl_wizard != null)
+                dl_wizard.download_progress (frac);
             if (dl_bar == null)
                 return;
             if (frac < 0) {
@@ -303,12 +342,22 @@ namespace TgWsProxy {
 
         private void on_downloaded (string path) {
             downloading = false;
+            if (dl_wizard != null) {
+                dl_wizard.download_finished (install_hint (path));
+                dl_wizard = null;
+            }
             if (update_dialog != null) update_dialog.close ();
             apply_update (path);
         }
 
         private void on_dl_failed (string reason) {
             downloading = false;
+            if (dl_wizard != null) {
+                // The wizard says it in its own step, with its own toast.
+                dl_wizard.download_failed (reason);
+                dl_wizard = null;
+                return;
+            }
             if (dl_btn != null) { dl_btn.sensitive = true; dl_btn.label = _("Download"); }
             if (dl_bar != null) dl_bar.visible = false;
             toast (_("Download failed: %s").printf (reason));
@@ -318,41 +367,72 @@ namespace TgWsProxy {
         // the system package installer (Android), open the disk image (macOS) or
         // swap the AppImage in place and relaunch.
         private void apply_update (string path) {
-#if WINDOWS
-            try {
-                Process.spawn_async (null, { path }, null,
-                    SpawnFlags.DO_NOT_REAP_CHILD, null, null);
-            } catch (Error e) {
-                toast (_("Could not start installer: %s").printf (e.message));
-                return;
-            }
-            application.quit ();
-#elif ANDROID
-            var s = get_surface ();
-            if (s != null)
-                Station.android_install_apk (s,
-                    "space.ampernic.anothertgproxy.ProxyApplication", path);
-#elif DARWIN
-            try { Station.open_uri ("file://" + path); }
-            catch (Error e) { toast (_("Could not open the disk image: %s").printf (e.message)); }
-#else
-            // AppImage: replace the running image and relaunch the new one.
-            var cur = Environment.get_variable ("APPIMAGE");
-            if (cur == null || cur == "") {
-                try { Station.open_uri ("file://" + path); } catch (Error e) {}
-                return;
-            }
-            if (FileUtils.rename (path, cur) != 0) {
-                toast (_("Could not replace the AppImage"));
-                return;
-            }
-            FileUtils.chmod (cur, 0755);
-            try {
-                Process.spawn_async (null, { cur }, null,
-                    SpawnFlags.DO_NOT_REAP_CHILD, null, null);
-            } catch (Error e) { toast (e.message); return; }
-            application.quit ();
+            switch (Platform.get_default ().update_kind ()) {
+            case UpdateKind.WINDOWS_SETUP:
+                try {
+                    Process.spawn_async (null, { path }, null,
+                        SpawnFlags.DO_NOT_REAP_CHILD, null, null);
+                } catch (Error e) {
+                    toast (_("Could not start installer: %s").printf (e.message));
+                    return;
+                }
+                application.quit ();
+                break;
+            case UpdateKind.ANDROID_APK:
+#if ANDROID
+                var s = get_surface ();
+                if (s != null)
+                    Station.android_install_apk (s,
+                        "space.ampernic.anothertgproxy.ProxyApplication", path);
 #endif
+                break;
+            case UpdateKind.MACOS_DMG:
+                try { Station.open_uri ("file://" + path); }
+                catch (Error e) { toast (_("Could not open the disk image: %s").printf (e.message)); }
+                break;
+            case UpdateKind.APPIMAGE:
+                // Replace the running image and relaunch the new one.
+                var cur = Environment.get_variable ("APPIMAGE");
+                if (cur == null || cur == "") {
+                    try { Station.open_uri ("file://" + path); } catch (Error e) {}
+                    return;
+                }
+                // GIO falls back to copy+delete when the two are on different
+                // filesystems, which rename(2) cannot do.
+                try {
+                    File.new_for_path (path).move (File.new_for_path (cur),
+                                                   FileCopyFlags.OVERWRITE, null, null);
+                } catch (Error e) {
+                    toast (_("Could not replace the AppImage: %s").printf (e.message));
+                    return;
+                }
+                FileUtils.chmod (cur, 0755);
+                try {
+                    Process.spawn_async (null, { cur }, null,
+                        SpawnFlags.DO_NOT_REAP_CHILD, null, null);
+                } catch (Error e) { toast (e.message); return; }
+                application.quit ();
+                break;
+            default:
+                break;
+            }
+        }
+
+        // What actually happens to the file, said in the wizard's own step. The
+        // two kinds that restart into the installer never get read.
+        private string install_hint (string path) {
+            switch (Platform.get_default ().update_kind ()) {
+            case UpdateKind.ANDROID_APK:
+                return _("Confirm the installation in the system installer. The app restarts on the new version.");
+            case UpdateKind.MACOS_DMG:
+                return _("The disk image is open: drag the app into Applications, replacing the old one, then start it again.");
+            case UpdateKind.WINDOWS_SETUP:
+                return _("The installer is starting. The app closes while it runs.");
+            case UpdateKind.APPIMAGE:
+                return _("The image is being replaced and the app restarts on the new version.");
+            default:
+                return _("The file is at %s.").printf (path);
+            }
         }
 
         // On macOS/Windows the app lives on in the tray after the window is

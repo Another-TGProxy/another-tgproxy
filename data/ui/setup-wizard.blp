@@ -91,6 +91,32 @@ template $TgWsProxySetupWizard : Adw.Dialog {
             };
           };
         }
+
+        Gtk.StackPage {
+          name: "downloading";
+          child: Adw.StatusPage {
+            icon-name: "folder-download-symbolic";
+            title: _("Downloading the update…");
+
+            child: Adw.Clamp {
+              maximum-size: 260;
+
+              child: Gtk.ProgressBar dl_bar {
+                show-text: true;
+                valign: center;
+              };
+            };
+          };
+        }
+
+        Gtk.StackPage {
+          name: "installing";
+          child: Adw.StatusPage install_status {
+            icon-name: "system-software-install-symbolic";
+            title: _("Installing the update");
+            description: "—";
+          };
+        }
       }
 
       Adw.StatusPage connection_page {
