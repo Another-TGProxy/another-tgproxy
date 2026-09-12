@@ -6,6 +6,13 @@ starts the proxy and hands over the connection link. Steps with nothing to ask
 skip themselves: no autostart step on Android, no status step where only one
 mode is available.
 
+**Media now loads on Android.** The engine looked for the system certificate store
+only in the bundle files desktop Linux uses, so on Android every verified
+connection failed. That guards the Cloudflare path, which meant only the
+datacentres with a direct route worked and everything else fell through to
+blocked addresses -- in practice, chats loaded and their images did not. Android
+keeps its trust store as a hashed directory, which the engine now reads.
+
 **The proxy no longer goes quiet after sleep.** On Windows and Android it could
 keep reporting "running" while Telegram refused it with invalid proxy settings.
 Two causes, both fixed:
@@ -41,6 +48,13 @@ wizard has already asked about it.
 В конце запускает прокси и выдаёт ссылку для подключения. Шаги, которым нечего
 спросить, пропускаются сами: на Android нет шага автозапуска, а шаг статуса
 не показывается, если доступен всего один режим.
+
+**На Android снова грузятся картинки.** Движок искал системные сертификаты только
+в файлах-связках, как принято в десктопном Linux, поэтому на Android проверка
+сертификата не проходила никогда. От неё зависит весь путь через Cloudflare: в
+итоге работали лишь датацентры с прямым маршрутом, а остальное упиралось в
+заблокированные адреса — переписка открывалась, а изображения нет. На Android
+хранилище доверия устроено каталогом, и теперь движок читает и его.
 
 **Прокси больше не замолкает после сна.** На Windows и Android он мог считаться
 работающим, пока Telegram отказывался от него с ошибкой о неверных настройках.
