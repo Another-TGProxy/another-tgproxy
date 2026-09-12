@@ -4,7 +4,7 @@ name: Flatpak bundle
 # separate publish-flatpak.yml pushes to the Ampernic Flatpak repo instead.)
 on:
   push:
-    branches: [main, devel]
+    branches: [main]
     tags: ['v*']
     paths: &paths
       - 'src/**'

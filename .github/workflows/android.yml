@@ -8,7 +8,7 @@ name: Android (experimental)
 on:
   workflow_dispatch:
   push:
-    branches: [main, devel]
+    branches: [main]
     tags: ['v*']
     paths: &paths
       - 'src/**'
