@@ -19,6 +19,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.SwitchRow updates_row;
         [GtkChild] private unowned Adw.ComboRow channel_row;
         [GtkChild] private unowned Adw.SwitchRow vulkan_row;
+        [GtkChild] private unowned Adw.ButtonRow wizard_row;
         [GtkChild] private unowned Adw.PreferencesGroup status_display_group;
         [GtkChild] private unowned Adw.ToggleGroup status_mode_group;
         [GtkChild] private unowned Adw.PreferencesGroup status_text_group;
@@ -27,6 +28,8 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.ButtonRow save_row;
 
         public signal void toast (string message);
+        // The window owns the wizard; Settings only offers a way back into it.
+        public signal void setup_requested ();
 
         private Config cfg;
         private DaemonClient client;
@@ -63,6 +66,7 @@ namespace TgWsProxy {
                 service.set_autostart (autostart_row.active);
             });
             save_row.activated.connect (save_settings);
+            wizard_row.activated.connect (() => setup_requested ());
 
 #if ANDROID
             // The only status display on Android is the foreground-service

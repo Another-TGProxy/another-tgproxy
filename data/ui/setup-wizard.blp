@@ -4,14 +4,15 @@ using Adw 1;
 template $TgWsProxySetupWizard : Adw.Dialog {
   content-width: 400;
   content-height: 620;
-  // Not dismissable: setup is either completed or explicitly skipped. Quitting
-  // the app stays possible — see SetupWizard.close_attempt and Window.
+  // First run has to go through: the proxy needs a port and a secret before it
+  // is of any use. Quitting the app stays possible — see SetupWizard.close_attempt
+  // and Window. Rerunning it from Settings makes it dismissable again.
   can-close: false;
   title: _("Setup");
 
   child: Adw.ToolbarView {
     [top]
-    Adw.HeaderBar {
+    Adw.HeaderBar header {
       show-start-title-buttons: false;
       show-end-title-buttons: false;
 
@@ -34,12 +35,6 @@ template $TgWsProxySetupWizard : Adw.Dialog {
         icon-name: "network-transmit-receive-symbolic";
         title: _("Another TGProxy");
         description: _("Let's get the proxy ready. It takes a minute.");
-
-        child: Gtk.Button skip_btn {
-          label: _("Skip setup");
-          halign: center;
-          styles ["flat"]
-        };
       }
 
       Gtk.Stack update_stack {
@@ -47,11 +42,18 @@ template $TgWsProxySetupWizard : Adw.Dialog {
 
         Gtk.StackPage {
           name: "checking";
+          // A spinner widget, not AdwSpinnerPaintable: the paintable has to name
+          // the widget it animates against, and that reference points back at an
+          // ancestor still being built. GtkBuilder resolves it here but not in
+          // the older GTK the AppImage is built against, where it degrades into
+          // a file path ("___object_5___") and draws a broken image instead.
           child: Adw.StatusPage {
             title: _("Checking for updates…");
 
-            paintable: Adw.SpinnerPaintable {
-              widget: update_stack;
+            child: Adw.Spinner {
+              width-request: 48;
+              height-request: 48;
+              halign: center;
             };
           };
         }
@@ -83,6 +85,9 @@ template $TgWsProxySetupWizard : Adw.Dialog {
                 styles ["flat"]
               }
 
+              // Not the same as Next: this one also silences the banner and the
+              // dialog for this release. Hidden where the release is only
+              // announced — there it IS the primary button.
               Gtk.Button skip_update_btn {
                 label: _("Skip, I know what I'm doing");
                 halign: center;
@@ -205,8 +210,10 @@ template $TgWsProxySetupWizard : Adw.Dialog {
           child: Adw.StatusPage {
             title: _("Starting the proxy…");
 
-            paintable: Adw.SpinnerPaintable {
-              widget: done_stack;
+            child: Adw.Spinner {
+              width-request: 48;
+              height-request: 48;
+              halign: center;
             };
           };
         }
@@ -278,10 +285,25 @@ template $TgWsProxySetupWizard : Adw.Dialog {
             title: _("Could not start");
             description: "—";
 
-            child: Gtk.Button back_to_settings_btn {
-              label: _("Back to settings");
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 6;
               halign: center;
-              styles ["pill"]
+
+              Gtk.Button back_to_settings_btn {
+                label: _("Back to settings");
+                halign: center;
+                styles ["pill"]
+              }
+
+              // The message above is a summary; what the daemon actually said is
+              // in the log, and this is the only place the user can reach it
+              // before the wizard is done.
+              Gtk.Button open_log_btn {
+                label: _("Open the log");
+                halign: center;
+                styles ["flat"]
+              }
             };
           };
         }

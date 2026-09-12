@@ -32,7 +32,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Gtk.Stack done_stack;
         [GtkChild] private unowned Adw.StatusPage error_status;
 
-        [GtkChild] private unowned Gtk.Button skip_btn;
+        [GtkChild] private unowned Adw.HeaderBar header;
         [GtkChild] private unowned Adw.SpinRow port_row;
         [GtkChild] private unowned Adw.PasswordEntryRow secret_row;
         [GtkChild] private unowned Gtk.Button regen_btn;
@@ -44,6 +44,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Gtk.Button copy_btn;
         [GtkChild] private unowned Gtk.Button support_btn;
         [GtkChild] private unowned Gtk.Button back_to_settings_btn;
+        [GtkChild] private unowned Gtk.Button open_log_btn;
         [GtkChild] private unowned Gtk.Revealer back_revealer;
         [GtkChild] private unowned Gtk.Button back_btn;
         [GtkChild] private unowned Gtk.Button next_btn;
@@ -63,13 +64,23 @@ namespace TgWsProxy {
         private string link = "";
         private bool applying = false;
         private uint apply_timer = 0;
+        private bool rerun = false;
 
+        // `rerun` is the wizard opened again from Settings rather than on first
+        // run: the app is already set up, so walking away has to be allowed.
         public void bind (Config cfg, DaemonClient client, ServiceController service,
-                          Station.Updates? updater) {
+                          Station.Updates? updater, bool rerun = false) {
             this.cfg = cfg;
             this.client = client;
             this.service = service;
             this.updater = updater;
+            this.rerun = rerun;
+
+            if (rerun) {
+                can_close = true;
+                header.show_end_title_buttons = true;
+                closed.connect (clear_timer);
+            }
 
             port_row.value = cfg.port;
             secret_row.text = cfg.secret;
@@ -119,15 +130,14 @@ namespace TgWsProxy {
             notes_btn.clicked.connect (show_release_notes);
             // Saying no here is about this release, not about updates in general:
             // remember it so nothing offers the same version again five seconds later.
-            skip_update_btn.clicked.connect (() => {
-                if (update_version != "") {
-                    cfg.skipped_version = update_version;
-                    cfg.save ();
-                }
-                go (1);
-            });
-            if (updater != null)
+            skip_update_btn.clicked.connect (skip_this_version);
+            if (updater != null) {
                 updater.available.connect (on_update_available);
+                // The step's own pages decide what the primary button says and
+                // whether it is shown at all.
+                update_stack.notify["visible-child"].connect (update_nav);
+            }
+            open_log_btn.clicked.connect (() => open_uri ("file://" + Paths.log_file ()));
             back_to_settings_btn.clicked.connect (() => {
                 done_stack.visible_child_name = "applying";
                 go_to (index_of (connection_page));
