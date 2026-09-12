@@ -23,6 +23,11 @@ Two causes, both fixed:
 after a network adapter change; the proxy used to stop accepting connections
 silently. It now restores the socket and carries on.
 
+**Android: swiping the app away no longer stops the proxy.** The service used to
+shut itself down when the app left the recents list, so Telegram lost the proxy
+as soon as the window was dismissed. The proxy now keeps running with its
+ongoing notification; stopping it is an explicit action inside the app.
+
 **Update offers are less pushy.** A version you turn down is remembered and not
 offered again, and the update dialog no longer pops up right after the setup
 wizard has already asked about it.
@@ -53,6 +58,11 @@ wizard has already asked about it.
 **Потерянный слушающий сокет восстанавливается.** Windows может закрыть его сам
 после смены сетевого адаптера — раньше прокси молча переставал принимать
 подключения. Теперь сокет пересоздаётся, и работа продолжается.
+
+**Android: смахивание приложения больше не выключает прокси.** Служба
+останавливала себя, когда приложение уходило из списка недавних, и Telegram
+терял прокси сразу после закрытия окна. Теперь прокси продолжает работать
+вместе со своим постоянным уведомлением, а выключается явно — из приложения.
 
 **Обновления навязываются меньше.** Версия, от которой вы отказались,
 запоминается и больше не предлагается, а диалог обновления не появляется сразу

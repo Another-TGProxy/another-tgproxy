@@ -102,10 +102,12 @@ public class ProxyService extends Service {
 		super.onDestroy();
 	}
 
-	// Swiping the app away from recents tears down the process; don't keep a
-	// zombie proxy running with no way to control it.
+	// Deliberately NOT stopping here. Swiping the app out of recents dismisses
+	// the window, not the proxy — Telegram keeps its connection through it, and
+	// the ongoing notification is still there to reopen the app or see the stats.
+	// Stopping the proxy is an explicit action inside the app.
 	@Override
 	public void onTaskRemoved(Intent rootIntent) {
-		stopSelf();
+		super.onTaskRemoved(rootIntent);
 	}
 }

@@ -31,7 +31,6 @@ import org.gtk.android.RuntimeApplication;
 // permission is requested here too. The battery-optimization nudge lives in the
 // GTK UI (Adw dialog via the gdk-android bridge), not here.
 public class ProxyApplication extends RuntimeApplication {
-	private boolean serviceStarted = false;
 
 	@Override
 	public void onCreate() {
@@ -125,14 +124,18 @@ public class ProxyApplication extends RuntimeApplication {
 					new String[] {"android.permission.POST_NOTIFICATIONS"}, 1001);
 		}
 
-		if (!serviceStarted) {
-			serviceStarted = true;
-			Intent svc = new Intent(this, ProxyService.class);
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-				startForegroundService(svc);
-			else
-				startService(svc);
-		}
+		// Started on every resume, not once per process. The service can die
+		// while we are backgrounded -- the system reclaims it, or a timeout fires
+		// -- and a process without a live foreground service drops to a cached
+		// oom_adj and gets frozen. The proxy then stops accepting: its socket
+		// still listens, so connections queue up in the kernel and rot there,
+		// which the client sees as a proxy that went dead. Starting an already
+		// running service is harmless: no second instance, just onStartCommand.
+		Intent svc = new Intent(this, ProxyService.class);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+			startForegroundService(svc);
+		else
+			startService(svc);
 
 		try {
 			nativeOnResume();

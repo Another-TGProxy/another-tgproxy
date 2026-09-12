@@ -21,8 +21,12 @@
         <activity android:name="org.gtk.android.ToplevelActivity"
                   android:launchMode="singleTask"
                   tools:replace="android:launchMode"/>
+        <!-- stopWithTask=false: swiping the app out of recents must not take the
+             proxy down with it. It is the default, but OEM launchers treat the
+             swipe aggressively, so say it out loud. -->
         <service android:name="space.ampernic.anothertgproxy.ProxyService"
                  android:exported="false"
+                 android:stopWithTask="false"
                  android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                       android:value="proxy"/>
