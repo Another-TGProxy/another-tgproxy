@@ -88,6 +88,22 @@ Message security comes from **MTProto** itself (end-to-end between the client an
 the data centre). The proxy and its TLS are only an obfuscation wrapper. See the
 [mtproxy-ws core](https://github.com/Another-TGProxy/mtproxy-ws#-security) for details.
 
+## ⚠️ Multi-threaded downloads in Telegram forks
+
+Client forks (ExteraGram, Nagram and others) offer a "download speed boost": the
+file is split into one-megabyte chunks and fetched over a dozen streams at once.
+Over a direct connection that is a win; through a proxy each stream is a separate
+TLS session that has to come up alongside the rest. The client does not wait that
+long — it cancels the requests, the answers arrive when nobody needs them
+(`received chunk but definitely cancelled` in its log), the video never plays,
+and the proxy ends up looking broken, down to the "proxy is not configured
+correctly and will be disabled" dialog.
+
+If large files stall while chats and images are fine, turn the booster off:
+**ExteraGram → Settings → ExteraGram → Download speed → Off.** The official
+client has no such mode and downloads fine through the very same proxy, which
+makes it a quick way to tell a client problem from a proxy one.
+
 ## 📦 Distribution
 
 - **Android.** The foreground service (`specialUse`) + battery-optimization
