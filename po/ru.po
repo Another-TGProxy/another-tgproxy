@@ -369,3 +369,12 @@ msgstr "Не удалось открыть ссылку: %s"
 
 msgid "Skip this version"
 msgstr "Пропустить версию"
+
+msgid "Vulkan renderer"
+msgstr "Отрисовка через Vulkan"
+
+msgid "Experimental and unstable: slower than OpenGL on many mobile GPUs, and driver quality varies. Takes effect after a restart."
+msgstr "Экспериментально и нестабильно: на многих мобильных видеоядрах медленнее OpenGL, качество драйверов разное. Применяется после перезапуска."
+
+msgid "Settings saved — restart to switch the renderer"
+msgstr "Настройки сохранены — перезапустите, чтобы сменить отрисовку"

@@ -77,6 +77,14 @@ int main (string[] args) {
         return TgWsProxy.run_daemon (args);   // background daemon + control IPC
     }
 #endif
+    // Opt-in Vulkan renderer. GSK picks the renderer from GSK_RENDERER, so this
+    // needs no GTK patch — and it must happen before Adw.init, since the choice is
+    // read when the first surface is realized. An explicit GSK_RENDERER from the
+    // environment always wins: debugging a renderer must not fight the setting.
+    if (Environment.get_variable ("GSK_RENDERER") == null
+        && TgWsProxy.Config.load ().vulkan_renderer)
+        Environment.set_variable ("GSK_RENDERER", "vulkan", true);
+
     Environment.set_application_name (Build.APP_NAME);
     Adw.init ();
     // GTK and libadwaita bind their own gettext domains to the baked-in LOCALEDIR

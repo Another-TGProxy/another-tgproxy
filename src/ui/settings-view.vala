@@ -18,6 +18,7 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.SwitchRow autostart_row;
         [GtkChild] private unowned Adw.SwitchRow updates_row;
         [GtkChild] private unowned Adw.ComboRow channel_row;
+        [GtkChild] private unowned Adw.SwitchRow vulkan_row;
         [GtkChild] private unowned Adw.PreferencesGroup status_display_group;
         [GtkChild] private unowned Adw.ToggleGroup status_mode_group;
         [GtkChild] private unowned Adw.PreferencesGroup status_text_group;
@@ -54,6 +55,7 @@ namespace TgWsProxy {
             if (ch == "") ch = Build.VERSION.contains ("-") ? "beta" : "stable";
             channel_row.selected = (ch == "beta") ? 1 : 0;
             status_row.text = cfg.status_template;
+            vulkan_row.active = cfg.vulkan_renderer;
 
             regen_btn.clicked.connect (() => { secret_row.text = Config.gen_secret (); });
             verify_cf_row.notify["active"].connect (() => {
@@ -113,12 +115,15 @@ namespace TgWsProxy {
             cfg.autostart = autostart_row.active;
             if (status_row.text.strip () != "") cfg.status_template = status_row.text.strip ();
             cfg.status_mode = status_mode_group.active_name ?? "auto";
+            bool vulkan_changed = cfg.vulkan_renderer != vulkan_row.active;
+            cfg.vulkan_renderer = vulkan_row.active;
             cfg.save ();
             // The daemon (re)builds the quick-settings entry via libqshub on reload
             // when this mode is chosen; no extension to toggle from here anymore.
             client.send ("reload");
             if (!service.is_active ()) service.start ();
-            toast (_("Settings saved"));
+            toast (vulkan_changed ? _("Settings saved — restart to switch the renderer")
+                                  : _("Settings saved"));
         }
     }
 }

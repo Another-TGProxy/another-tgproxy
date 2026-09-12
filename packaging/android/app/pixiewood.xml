@@ -35,7 +35,6 @@
 			<patch>android-window-insets-pre30</patch>
 			<patch>android-vulkan-procaddr-pre28</patch>
 			<patch>android-vulkan-backend</patch>
-			<patch>android-vulkan-primary</patch>
 		</gtk>
 		<libadwaita/>
 	</dependencies>

@@ -96,6 +96,15 @@ template $TgWsProxySettingsView : Adw.Bin {
             strings [_("Release"), _("Beta")]
           };
         }
+
+        Adw.ExpanderRow {
+          title: _("Advanced");
+
+          Adw.SwitchRow vulkan_row {
+            title: _("Vulkan renderer");
+            subtitle: _("Experimental and unstable: slower than OpenGL on many mobile GPUs, and driver quality varies. Takes effect after a restart.");
+          }
+        }
       }
 
       Adw.PreferencesGroup status_display_group {

@@ -58,6 +58,10 @@ namespace TgWsProxy {
         public bool setup_done = false;
         // A release the user explicitly said no to; it is never offered again.
         public string skipped_version = "";
+        // Render with Vulkan instead of GL. Off by default: on the mobile GPUs we
+        // measured it trails GL, and driver maturity varies wildly. Applied as
+        // GSK_RENDERER at startup (src/main.vala), so it needs a restart.
+        public bool vulkan_renderer = false;
 
         public static string gen_secret () {
             var sb = new StringBuilder ();
@@ -121,6 +125,8 @@ namespace TgWsProxy {
                     c.setup_done = o.get_boolean_member ("setup_done");
                 if (o.has_member ("skipped_version"))
                     c.skipped_version = o.get_string_member ("skipped_version");
+                if (o.has_member ("vulkan_renderer"))
+                    c.vulkan_renderer = o.get_boolean_member ("vulkan_renderer");
                 parsed = true;
             } catch (Error e) {
                 warning ("config load failed: %s", e.message);
@@ -178,6 +184,7 @@ namespace TgWsProxy {
             b.set_member_name ("status_mode"); b.add_string_value (status_mode);
             b.set_member_name ("setup_done"); b.add_boolean_value (setup_done);
             b.set_member_name ("skipped_version"); b.add_string_value (skipped_version);
+            b.set_member_name ("vulkan_renderer"); b.add_boolean_value (vulkan_renderer);
             b.end_object ();
 
             var gen = new Json.Generator ();

@@ -158,7 +158,10 @@ jobs:
           # Android 8+ (API 26): pin GTK to the commit our gdk-android fallback patches
           # apply against, drop the patches where Pixiewood resolves <patch> entries
           # (pixiewood.xml references them), and lower the gradle minSdk from 31 to 26.
-          sed -i 's|^revision = main|revision = 33f9bc7bc5653e9214226e44758ae74967d8c0b6|' \
+          # The pin also carries our upstreamed Vulkan fixes (GskTransform leak,
+          # globals in a UBO) and the harfbuzz/pango version sync GTK landed in
+          # August -- without it pango demands harfbuzz >= 11 and gets 8.4.0.
+          sed -i 's|^revision = main|revision = 9a950181e1dc800beb2c4a2da2cf2c798b19b80e|' \
             "$RUNNER_TEMP/pw/prepare/wraps/gtk/gtk.wrap"
           cp packaging/android/gtk/android-input-jni.patch \
              packaging/android/gtk/android-choreographer-fallback.patch \
@@ -166,7 +169,6 @@ jobs:
              packaging/android/gtk/android-window-insets-pre30.patch \
              packaging/android/gtk/android-vulkan-procaddr-pre28.patch \
              packaging/android/gtk/android-vulkan-backend.patch \
-             packaging/android/gtk/android-vulkan-primary.patch \
              "$RUNNER_TEMP/pw/prepare/wraps/gtk/"
           sed -i 's/minSdk 31/minSdk 26/' "$RUNNER_TEMP/pw/generate/gradle.xsl"
           # glib needs iconv, absent from Bionic below API 28; supply GNU libiconv as

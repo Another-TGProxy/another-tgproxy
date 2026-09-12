@@ -609,12 +609,13 @@ index e2ed7f8..75759a2 100644
    gdk_android_java_cache.a_context.klass = (*env)->NewGlobalRef (env, android_context);
    POPULATE_REFCACHE_METHOD (a_context, get_color, "getColor", "(I)I")
    POPULATE_REFCACHE_METHOD (a_context, get_content_resolver, "getContentResolver", "()Landroid/content/ContentResolver;")
-@@ -284,6 +314,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
+@@ -284,7 +314,8 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
    POPULATE_REFCACHE_STRING (a_context, clipboard_service, "CLIPBOARD_SERVICE")
- 
+
    jclass android_content_resolver = (*env)->FindClass (env, "android/content/ContentResolver");
 +  if ((*env)->ExceptionCheck (env)) (*env)->ExceptionClear (env); /* class absent on this API: leave it NULL */
    gdk_android_java_cache.a_content_resolver.klass = (*env)->NewGlobalRef (env, android_content_resolver);
+   POPULATE_REFCACHE_STRING (a_content_resolver, scheme_content, "SCHEME_CONTENT")
    POPULATE_REFCACHE_METHOD (a_content_resolver, get_type, "getType", "(Landroid/net/Uri;)Ljava/lang/String;");
    POPULATE_REFCACHE_METHOD (a_content_resolver, open_asset_fd, "openAssetFileDescriptor", "(Landroid/net/Uri;Ljava/lang/String;Landroid/os/CancellationSignal;)Landroid/content/res/AssetFileDescriptor;");
 @@ -291,6 +322,7 @@ gdk_android_initialize (JNIEnv *env, jobject application_classloader, jobject ac
