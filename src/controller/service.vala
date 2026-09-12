@@ -57,23 +57,58 @@ namespace TgWsProxy {
                 failed (_("Failed to start the service: %s").printf (e.message));
             }
 #else
-            // Running as an AppImage we have no D-Bus service of our own; the one
-            // installed on the system may belong to a different delivery (e.g. a
-            // Flatpak), and activating it would launch THAT daemon instead. So spawn
-            // our own binary directly ($APPIMAGE re-runs the image in --daemon mode).
+            // The activatable service on this system may belong to a different
+            // delivery of the same app-id — a Flatpak export comes before the
+            // system one in XDG_DATA_DIRS — and activating it launches THAT
+            // daemon, with its own config, port and secret. Activate only when the
+            // installed service runs this very binary. Inside the sandbox it always
+            // does, and there activation is not optional: a daemon spawned as our
+            // child would die with the GUI's sandbox instance.
             bool is_appimage = Environment.get_variable ("APPIMAGE") != null;
-            if (!is_appimage && dbus_activate ()) {
+            bool in_flatpak = FileUtils.test ("/.flatpak-info", FileTest.EXISTS);
+            if (!is_appimage && (in_flatpak || service_runs_this_binary ())
+                && dbus_activate ()) {
                 verify_started.begin ();
                 return;
             }
             try {
-                new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_SILENCE,
-                                daemon_exec (), "--daemon");
+                var sp = new Subprocess (SubprocessFlags.STDOUT_SILENCE | SubprocessFlags.STDERR_PIPE,
+                                         daemon_exec (), "--daemon");
+                watch_daemon.begin (sp);
                 verify_started.begin ();
             } catch (Error e) {
                 failed (_("Failed to start the service: %s").printf (e.message));
             }
 #endif
+        }
+
+        // Whether the D-Bus service that would be activated for DAEMON_ID is the
+        // one shipped with this binary. The first match along XDG_DATA_HOME +
+        // XDG_DATA_DIRS is the one dbus-daemon uses, so only that one is checked.
+        bool service_runs_this_binary () {
+            var me = daemon_exec ();
+            var me_real = Posix.realpath (me) ?? me;
+            string[] dirs = { Environment.get_user_data_dir () };
+            foreach (var d in Environment.get_system_data_dirs ())
+                dirs += d;
+            foreach (var d in dirs) {
+                var path = Path.build_filename (d, "dbus-1", "services",
+                                                Build.DAEMON_ID + ".service");
+                if (!FileUtils.test (path, FileTest.EXISTS))
+                    continue;
+                try {
+                    var kf = new KeyFile ();
+                    kf.load_from_file (path, KeyFileFlags.NONE);
+                    string[] argv;
+                    Shell.parse_argv (kf.get_string ("D-BUS Service", "Exec"), out argv);
+                    if (argv.length == 0)
+                        return false;
+                    return (Posix.realpath (argv[0]) ?? argv[0]) == me_real;
+                } catch (Error e) {
+                    return false;
+                }
+            }
+            return false;   // nothing installed: spawning ourselves is the only way
         }
 
         // True if something is already listening on the configured proxy address.
@@ -104,6 +139,21 @@ namespace TgWsProxy {
                 return busy;
             } catch (Error e) {
                 return false;
+            }
+        }
+
+        // A daemon that exits on its own took the reason with it — a bus name held
+        // by another delivery of this app, a port it could not bind. Without this
+        // the GUI only ever sees the timeout and has to guess at the cause.
+        async void watch_daemon (Subprocess sp) {
+            try {
+                string? err = null;
+                yield sp.communicate_utf8_async (null, null, null, out err);
+                if (!sp.get_if_exited () || sp.get_exit_status () == 0)
+                    return;
+                var msg = (err ?? "").strip ();
+                failed (msg != "" ? msg : _("The service failed to start."));
+            } catch (Error e) {
             }
         }
 
