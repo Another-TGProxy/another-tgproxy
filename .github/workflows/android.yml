@@ -217,6 +217,15 @@ jobs:
           if [ -n "$VERSION" ]; then
             sed -i "s|value: '',|value: '$VERSION',|" meson_options.txt
             grep -n "release_version" -A2 meson_options.txt
+            # A prerelease tag (2.2.0-beta1) gets the devel launcher icon so a test
+            # build is obvious on the home screen, but keeps the release profile:
+            # same package id, same config dir, so betas update in place and moving
+            # between the stable and beta channels neither installs a second copy
+            # nor loses the settings.
+            case "$VERSION" in
+              *-*) LAUNCHER_BG=ic_launcher_background.Devel.xml
+                   LAUNCHER_MONO=ic_launcher_monochrome.Devel.xml ;;
+            esac
           else
             # Untagged branch build: development profile (.Devel icon/name +
             # striped header, separate config dir), set as the meson option default.

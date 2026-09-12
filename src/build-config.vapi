@@ -13,4 +13,5 @@ namespace Build {
     public const string HOMEPAGE;
     public const string BUGTRACKER;
     public const bool IS_DEVEL;
+    public const bool IS_PRERELEASE;
 }

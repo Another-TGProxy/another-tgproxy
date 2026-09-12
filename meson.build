@@ -50,6 +50,12 @@ conf.set_quoted('LOCALEDIR', localedir)
 conf.set_quoted('HOMEPAGE', homepage)
 conf.set_quoted('BUGTRACKER', bugtracker)
 conf.set10('IS_DEVEL', is_devel)
+# A prerelease tag (2.2.0-beta1) is marked in the UI like a development build,
+# but deliberately keeps the release app-id, config dir and name: switching
+# between the stable and beta channels has to update in place. Giving betas the
+# .Devel identity would install them alongside as a separate app with separate
+# settings, which is not what a test build of the same program should do.
+conf.set10('IS_PRERELEASE', app_version.contains('-'))
 config_h = configure_file(output: 'build-config.h', configuration: conf)
 
 # On Android GLib/GTK fall back to proxy-libintl built -DSTUB_ONLY, so gettext is

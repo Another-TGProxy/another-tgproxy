@@ -25,7 +25,10 @@ namespace TgWsProxy {
             this.title = Build.APP_NAME;
             // Development builds get libadwaita's striped "devel" header (and the
             // .Devel icon/name from the build profile) so they're unmistakable.
-            if (Build.IS_DEVEL)
+            // Betas wear the striped header too: they carry the release app-id so
+            // channel switching updates in place, and without the stripe there is
+            // nothing on screen telling a test build from the stable one.
+            if (Build.IS_DEVEL || Build.IS_PRERELEASE)
                 this.add_css_class ("devel");
             cfg = Config.load ();
             service = new ServiceController (cfg);
