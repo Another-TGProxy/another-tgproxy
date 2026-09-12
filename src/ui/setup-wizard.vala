@@ -88,6 +88,23 @@ namespace TgWsProxy {
             });
             steps.notify["visible-child"].connect (update_nav);
 
+            // Swiping between steps: on a phone the thumb reaches for it before it
+            // reaches the buttons. Forward honours the same readiness check as the
+            // Next button, so a swipe cannot skip past an unfinished step.
+            var swipe = new Gtk.GestureSwipe ();
+            swipe.swipe.connect ((vx, vy) => {
+                double ax = (vx < 0) ? -vx : vx;
+                double ay = (vy < 0) ? -vy : vy;
+                if (ax < 200 || ax < ay) return;   // too slow, or a vertical scroll
+                if (vx < 0) {
+                    if (!finished () && !offering_update () && step_ready (current ()))
+                        go (1);
+                } else {
+                    go (-1);
+                }
+            });
+            steps.add_controller (swipe);
+
             open_btn.clicked.connect (() => open_uri (link));
             copy_btn.clicked.connect (() => {
                 if (link == "") return;

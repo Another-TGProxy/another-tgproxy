@@ -21,6 +21,12 @@
     <file alias="icons/scalable/actions/open-menu-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/open-menu-symbolic.svg</file>
     <file alias="icons/scalable/places/user-home-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/places/user-home-symbolic.svg</file>
     <file alias="icons/scalable/mimetypes/text-x-generic-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/mimetypes/text-x-generic-symbolic.svg</file>
+    <file alias="icons/scalable/actions/go-previous-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/go-previous-symbolic.svg</file>
+    <file alias="icons/scalable/actions/system-run-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/system-run-symbolic.svg</file>
+    <file alias="icons/scalable/actions/object-select-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/object-select-symbolic.svg</file>
+    <file alias="icons/scalable/devices/network-wired-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/devices/network-wired-symbolic.svg</file>
+    <file alias="icons/scalable/status/software-update-available-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/status/software-update-available-symbolic.svg</file>
+    <file alias="icons/scalable/actions/view-reveal-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/actions/view-reveal-symbolic.svg</file>
     <file alias="icons/scalable/emblems/emblem-system-symbolic.svg" preprocess="xml-stripblanks">icons/hicolor/scalable/emblems/emblem-system-symbolic.svg</file>
   </gresource>
 </gresources>
