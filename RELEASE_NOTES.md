@@ -13,6 +13,13 @@ datacentres with a direct route worked and everything else fell through to
 blocked addresses -- in practice, chats loaded and their images did not. Android
 keeps its trust store as a hashed directory, which the engine now reads.
 
+**Blocked addresses no longer stall transfers.** Connecting to an address the ISP
+filters used to wait out the kernel's TCP timeout -- over two minutes -- because
+such an address swallows the connection attempt instead of refusing it. Media is
+fetched over parallel streams, so those stuck attempts were the download: it
+stalled rather than failing over to the Cloudflare route. Connections now give up
+after five seconds and take the working path.
+
 **The proxy no longer goes quiet after sleep.** On Windows and Android it could
 keep reporting "running" while Telegram refused it with invalid proxy settings.
 Two causes, both fixed:
@@ -55,6 +62,13 @@ wizard has already asked about it.
 итоге работали лишь датацентры с прямым маршрутом, а остальное упиралось в
 заблокированные адреса — переписка открывалась, а изображения нет. На Android
 хранилище доверия устроено каталогом, и теперь движок читает и его.
+
+**Заблокированные адреса больше не подвешивают загрузку.** Подключение к адресу,
+который фильтрует провайдер, раньше ждало системного таймаута TCP — больше двух
+минут: такой адрес не отказывает в соединении, а молча его проглатывает. Медиа
+качается несколькими потоками, и эти зависшие попытки и были загрузкой — она
+стояла вместо того, чтобы уйти на запасной маршрут через Cloudflare. Теперь
+попытка прекращается через пять секунд и работа продолжается рабочим путём.
 
 **Прокси больше не замолкает после сна.** На Windows и Android он мог считаться
 работающим, пока Telegram отказывался от него с ошибкой о неверных настройках.
