@@ -70,8 +70,24 @@ namespace TgWsProxy {
             // in-process EngineHost already set the logger up.
             Logging.attach (cfg);
 
-            // Notify about a newer GitHub release where no repo manages updates
-            // (Windows/macOS/Android/AppImage). Native/Flatpak Linux uses its repo.
+            // Held back until the first-run wizard is done: an update dialog
+            // popping over it would bury the setup the user was in the middle of.
+            if (cfg.setup_done)
+                start_update_check ();
+        }
+
+        private void start_update_check () {
+            var u = ensure_updater ();
+            if (u != null)
+                u.check ();
+        }
+
+        // Build the updater for a newer GitHub release where no repo manages
+        // updates (Windows/macOS/Android/AppImage); Native/Flatpak Linux uses its
+        // repo and gets none. Creating it does not check — the wizard drives its
+        // own check on the update step, and the window checks once it's done.
+        public Station.Updates? ensure_updater () {
+            if (updater != null) return updater;
             if (cfg.check_updates && Platform.get_default ().updates_relevant ()) {
                 // GitHub releases; downloads are verified against the SHA256SUMS
                 // release asset (libstation resolves the asset URL + checks SHA-256).
@@ -104,8 +120,47 @@ namespace TgWsProxy {
                 updater.downloaded.connect (on_downloaded);
                 updater.download_failed.connect (on_dl_failed);
                 update_banner.button_clicked.connect (() => show_update_dialog ());
-                updater.check ();
             }
+            return updater;
+        }
+
+        // Entry point for the wizard's "update now": the download/install flow
+        // lives here, so the wizard hands the job over instead of copying it.
+        public void open_update_dialog () {
+            show_update_dialog ();
+        }
+
+        // Run the first-run wizard, once. Called after the window is on screen so
+        // the dialog has something to attach to.
+        private bool setup_active = false;
+        // Set once the wizard has had its say about updates this session.
+        private bool update_dialog_suppressed = false;
+
+        public void maybe_run_setup () {
+            if (cfg.setup_done) return;
+            setup_active = true;
+            var wizard = new SetupWizard ();
+            wizard.toast.connect ((m) => { toast (m); });
+            // Hands its update step our updater, and hands the install back to us.
+            wizard.update_requested.connect (() => {
+                wizard.release ();
+                open_update_dialog ();
+            });
+            wizard.bind (cfg, client, service, ensure_updater ());
+            // The wizard is modal and refuses to be dismissed, so closing the
+            // window has to tear it down explicitly or the window can't close.
+            this.close_request.connect (() => {
+                wizard.release ();
+                return false;
+            });
+            // Whatever the outcome — finished, skipped or quit — the update check
+            // is free to run once the wizard is out of the way.
+            wizard.closed.connect (() => {
+                setup_active = false;
+                update_dialog_suppressed = true;
+                start_update_check ();
+            });
+            wizard.present (this);
         }
 
         private Station.Updates? updater = null;
@@ -118,12 +173,20 @@ namespace TgWsProxy {
         private bool downloading = false;
 
         private void on_update_available (string version, string url, string notes) {
+            // A version the user turned down stays turned down — no banner, no dialog.
+            if (version == cfg.skipped_version)
+                return;
             update_url = url;
             update_version = version;
             update_notes = notes;
             update_banner.title = _("Update available: %s").printf (version);
             update_banner.revealed = true;
-            show_update_dialog ();
+            // Don't pop the dialog over the wizard, nor the moment it closes: the
+            // wizard has its own update step, and repeating the offer right after
+            // the user has just dealt with it is nagging. The banner stays, so the
+            // offer is one click away whenever they want it.
+            if (!setup_active && !update_dialog_suppressed)
+                show_update_dialog ();
         }
 
         // A dialog with the release notes, a progress bar and Later/Download.
@@ -156,11 +219,21 @@ namespace TgWsProxy {
             box.append (dl_bar);
 
             var actions = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 8) { halign = Gtk.Align.END };
+            // "Later" means ask again; this one means never for this release.
+            var skip = new Gtk.Button.with_label (_("Skip this version"));
+            skip.add_css_class ("flat");
+            skip.clicked.connect (() => {
+                cfg.skipped_version = update_version;
+                cfg.save ();
+                update_banner.revealed = false;
+                dlg.close ();
+            });
             var later = new Gtk.Button.with_label (_("Later"));
             later.clicked.connect (() => dlg.close ());
             dl_btn = new Gtk.Button.with_label (_("Download"));
             dl_btn.add_css_class ("suggested-action");
             dl_btn.clicked.connect (() => start_download ());
+            actions.append (skip);
             actions.append (later);
             actions.append (dl_btn);
             box.append (actions);
@@ -348,6 +421,7 @@ namespace TgWsProxy {
                 issue_url = Build.BUGTRACKER,
                 translator_credits = _("translator-credits")
             };
+            about.add_link (_("Support channel"), SUPPORT_CHANNEL);
             about.present (this);
         }
     }

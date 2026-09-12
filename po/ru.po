@@ -270,3 +270,102 @@ msgstr "Прокси MTProto ↔ WebSocket для Telegram."
 
 msgid "translator-credits"
 msgstr "Ampernic"
+
+msgid "Setup"
+msgstr "Настройка"
+
+msgid "Let's get the proxy ready. It takes a minute."
+msgstr "Подготовим прокси к работе. Это займёт минуту."
+
+msgid "Skip setup"
+msgstr "Пропустить настройку"
+
+msgid "Checking for updates…"
+msgstr "Проверяем обновления…"
+
+msgid "Up to date"
+msgstr "Обновлений нет"
+
+msgid "You are running the latest version."
+msgstr "У вас последняя версия."
+
+msgid "Update available"
+msgstr "Доступно обновление"
+
+msgid "Version %s is ready to install."
+msgstr "Версия %s готова к установке."
+
+msgid "Update now"
+msgstr "Обновить"
+
+msgid "Release notes"
+msgstr "Что нового"
+
+msgid "Skip, I know what I'm doing"
+msgstr "Пропустить, я знаю что делаю"
+
+msgid "Connection"
+msgstr "Соединение"
+
+msgid "Telegram will connect to the proxy at this port. The secret works as its password."
+msgstr "Telegram будет подключаться к прокси по этому порту. Секрет работает как пароль."
+
+msgid "Advanced"
+msgstr "Дополнительно"
+
+msgid "Autostart"
+msgstr "Автозапуск"
+
+msgid "Start the proxy on login so Telegram always finds it up."
+msgstr "Запускать прокси при входе в систему, чтобы Telegram всегда находил его включённым."
+
+msgid "Start on login"
+msgstr "Запускать при входе"
+
+msgid "Where to show that the proxy is running."
+msgstr "Где показывать, что прокси работает."
+
+msgid "Starting the proxy…"
+msgstr "Запускаем прокси…"
+
+msgid "All set"
+msgstr "Всё готово"
+
+msgid "Add this link in Telegram and the proxy is yours."
+msgstr "Добавьте эту ссылку в Telegram — и прокси ваш."
+
+msgid "Support channel"
+msgstr "Канал поддержки"
+
+msgid "News, help and release notes"
+msgstr "Новости, помощь и описания выпусков"
+
+msgid "Open the channel"
+msgstr "Открыть канал"
+
+msgid "Start using"
+msgstr "Начать пользоваться"
+
+msgid "Could not start"
+msgstr "Не удалось запустить"
+
+msgid "Back to settings"
+msgstr "Вернуться к настройкам"
+
+msgid "Back"
+msgstr "Назад"
+
+msgid "Next"
+msgstr "Далее"
+
+msgid "Finish"
+msgstr "Завершить"
+
+msgid "The proxy did not report back in time. Another copy may already be holding port %d — check the log for details."
+msgstr "Прокси не отозвался вовремя. Возможно, порт %d уже занят другой копией — подробности в журнале."
+
+msgid "Failed to open the link: %s"
+msgstr "Не удалось открыть ссылку: %s"
+
+msgid "Skip this version"
+msgstr "Пропустить версию"

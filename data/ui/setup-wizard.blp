@@ -1,0 +1,296 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TgWsProxySetupWizard : Adw.Dialog {
+  content-width: 400;
+  content-height: 620;
+  // Not dismissable: setup is either completed or explicitly skipped. Quitting
+  // the app stays possible — see SetupWizard.close_attempt and Window.
+  can-close: false;
+  title: _("Setup");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-start-title-buttons: false;
+      show-end-title-buttons: false;
+
+      // Filled with one dot per visible step by the wizard, which also marks
+      // the current one. Adw's dots indicator needs a real Adw.Carousel, and a
+      // carousel would let pages be swiped past their validation.
+      title-widget: Gtk.Box dots_box {
+        spacing: 8;
+        halign: center;
+        valign: center;
+      };
+    }
+
+    content: Gtk.Stack steps {
+      transition-type: slide_left_right;
+      transition-duration: 250;
+      vhomogeneous: false;
+
+      Adw.StatusPage welcome_page {
+        icon-name: "network-transmit-receive-symbolic";
+        title: _("Another TGProxy");
+        description: _("Let's get the proxy ready. It takes a minute.");
+
+        child: Gtk.Button skip_btn {
+          label: _("Skip setup");
+          halign: center;
+          styles ["flat"]
+        };
+      }
+
+      Gtk.Stack update_stack {
+        transition-type: crossfade;
+
+        Gtk.StackPage {
+          name: "checking";
+          child: Adw.StatusPage {
+            title: _("Checking for updates…");
+
+            paintable: Adw.SpinnerPaintable {
+              widget: update_stack;
+            };
+          };
+        }
+
+        Gtk.StackPage {
+          name: "uptodate";
+          child: Adw.StatusPage {
+            icon-name: "emblem-ok-symbolic";
+            title: _("Up to date");
+            description: _("You are running the latest version.");
+          };
+        }
+
+        Gtk.StackPage {
+          name: "available";
+          child: Adw.StatusPage update_status {
+            icon-name: "software-update-available-symbolic";
+            title: _("Update available");
+            description: "—";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 6;
+              halign: center;
+
+              Gtk.Button notes_btn {
+                label: _("Release notes");
+                halign: center;
+                styles ["flat"]
+              }
+
+              Gtk.Button skip_update_btn {
+                label: _("Skip, I know what I'm doing");
+                halign: center;
+                styles ["flat"]
+              }
+            };
+          };
+        }
+      }
+
+      Adw.StatusPage connection_page {
+        icon-name: "network-wired-symbolic";
+        title: _("Connection");
+        description: _("Telegram will connect to the proxy at this port. The secret works as its password.");
+
+        child: Adw.Clamp {
+          maximum-size: 400;
+
+          child: Gtk.Box {
+            orientation: vertical;
+            spacing: 12;
+
+            Adw.PreferencesGroup {
+              Adw.SpinRow port_row {
+                title: _("Port");
+                adjustment: Gtk.Adjustment {
+                  lower: 1;
+                  upper: 65535;
+                  step-increment: 1;
+                };
+              }
+
+              Adw.PasswordEntryRow secret_row {
+                title: _("Secret (32 hex)");
+
+                [suffix]
+                Gtk.Button regen_btn {
+                  icon-name: "view-refresh-symbolic";
+                  tooltip-text: _("Generate");
+                  valign: center;
+                  styles ["flat"]
+                }
+              }
+            }
+
+            Adw.PreferencesGroup {
+              Adw.ExpanderRow host_expander {
+                title: _("Advanced");
+
+                Adw.EntryRow host_row {
+                  title: _("Host");
+                }
+              }
+            }
+          };
+        };
+      }
+
+      Adw.StatusPage autostart_page {
+        icon-name: "system-run-symbolic";
+        title: _("Autostart");
+        description: _("Start the proxy on login so Telegram always finds it up.");
+
+        child: Adw.Clamp {
+          maximum-size: 400;
+
+          child: Adw.PreferencesGroup {
+            Adw.SwitchRow autostart_row {
+              title: _("Start on login");
+            }
+          };
+        };
+      }
+
+      Adw.StatusPage status_page {
+        icon-name: "view-reveal-symbolic";
+        title: _("Status display");
+        description: _("Where to show that the proxy is running.");
+
+        child: Adw.Clamp {
+          maximum-size: 400;
+
+          child: Adw.ToggleGroup status_mode_group {
+            homogeneous: true;
+          };
+        };
+      }
+
+      Gtk.Stack done_stack {
+        transition-type: crossfade;
+
+        Gtk.StackPage {
+          name: "applying";
+          child: Adw.StatusPage {
+            title: _("Starting the proxy…");
+
+            paintable: Adw.SpinnerPaintable {
+              widget: done_stack;
+            };
+          };
+        }
+
+        Gtk.StackPage {
+          name: "ready";
+          child: Adw.StatusPage {
+            icon-name: "emblem-ok-symbolic";
+            title: _("All set");
+            description: _("Add this link in Telegram and the proxy is yours.");
+
+            child: Adw.Clamp {
+              maximum-size: 400;
+
+              child: Gtk.Box {
+                orientation: vertical;
+                spacing: 18;
+
+                Adw.PreferencesGroup {
+                  Adw.ActionRow link_row {
+                    title: _("Connection link");
+                    subtitle: "—";
+                    subtitle-selectable: true;
+                    use-markup: false;
+
+                    [suffix]
+                    Gtk.Button open_btn {
+                      icon-name: "send-to-symbolic";
+                      tooltip-text: _("Open in Telegram");
+                      valign: center;
+                      styles ["flat"]
+                    }
+
+                    [suffix]
+                    Gtk.Button copy_btn {
+                      icon-name: "edit-copy-symbolic";
+                      tooltip-text: _("Copy link");
+                      valign: center;
+                      styles ["flat"]
+                    }
+                  }
+                }
+
+                Adw.PreferencesGroup {
+                  Adw.ActionRow support_row {
+                    title: _("Support channel");
+                    subtitle: _("News, help and release notes");
+                    activatable-widget: support_btn;
+
+                    [suffix]
+                    Gtk.Button support_btn {
+                      icon-name: "send-to-symbolic";
+                      tooltip-text: _("Open the channel");
+                      valign: center;
+                      styles ["flat"]
+                    }
+                  }
+                }
+
+              };
+            };
+          };
+        }
+
+        Gtk.StackPage {
+          name: "error";
+          child: Adw.StatusPage error_status {
+            icon-name: "dialog-error-symbolic";
+            title: _("Could not start");
+            description: "—";
+
+            child: Gtk.Button back_to_settings_btn {
+              label: _("Back to settings");
+              halign: center;
+              styles ["pill"]
+            };
+          };
+        }
+      }
+    };
+
+    [bottom]
+    Gtk.CenterBox {
+      margin-start: 12;
+      margin-end: 12;
+      margin-top: 6;
+      margin-bottom: 12;
+
+      [start]
+      Gtk.Revealer back_revealer {
+        transition-type: crossfade;
+        reveal-child: false;
+        halign: start;
+
+        child: Gtk.Button back_btn {
+          icon-name: "go-previous-symbolic";
+          tooltip-text: _("Back");
+          width-request: 48;
+          height-request: 48;
+          styles ["circular"]
+        };
+      }
+
+      [center]
+      Gtk.Button next_btn {
+        label: _("Next");
+        width-request: 156;
+        halign: center;
+        styles ["pill", "suggested-action"]
+      }
+    }
+  };
+}

@@ -67,6 +67,7 @@ namespace TgWsProxy {
         // for the normal launch and for the tray "Open" action.
         public void present_window () {
             var win = this.active_window;
+            bool fresh = (win == null);
             if (win == null) {
                 win = new Window (this);
             }
@@ -77,6 +78,10 @@ namespace TgWsProxy {
             hook_win_close (win);   // close hides to tray instead of quitting
 #endif
             win.present ();
+            // Only for a window we just built: reopening from the tray must not
+            // throw the wizard at someone who is already set up.
+            if (fresh)
+                ((Window) win).maybe_run_setup ();
         }
 
 #if WINDOWS || DARWIN
@@ -206,8 +211,7 @@ namespace TgWsProxy {
         void on_tray_status (Status s) {
             tray_running = s.running;
             if (s.secret.length == 32)
-                tray_link = "tg://proxy?server=%s&port=%d&secret=dd%s".printf (
-                    s.host, s.port, s.secret);
+                tray_link = proxy_link (s.host, s.port, s.secret);
             if (tray != null)
                 tray.update (
                     s.running ? _("Another TGProxy — running")

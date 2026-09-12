@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 namespace TgWsProxy {
 
+    // Telegram channel with news and help. Shown on the wizard's last step and
+    // in the About dialog — the two places we control ourselves. It cannot be a
+    // Telegram-promoted channel: that needs a proxy tag, which only travels
+    // inside the middle-proxy RPC this proxy deliberately does not speak.
+    public const string SUPPORT_CHANNEL = "https://t.me/another_tgproxy";
+
     // App paths (Linux: $XDG_CONFIG_HOME/AnotherTGProxy).
     namespace Paths {
         public string app_dir () {
@@ -46,6 +52,12 @@ namespace TgWsProxy {
         // Placeholders: {active} {total} {up} {down} {host} {port} {secret}
         public string status_template = "Telegram · {active} conn. · ↑{up} ↓{down}";
         public string status_mode = "auto";              // auto|window|tray|background|quicksettings|notification
+        // Whether the first-run wizard has been completed. An explicit field, not
+        // "does config.json exist": load() writes the file on the very first call
+        // to persist the generated secret, so the file exists from then on.
+        public bool setup_done = false;
+        // A release the user explicitly said no to; it is never offered again.
+        public string skipped_version = "";
 
         public static string gen_secret () {
             var sb = new StringBuilder ();
@@ -105,6 +117,10 @@ namespace TgWsProxy {
                     c.status_template = o.get_string_member ("status_template");
                 if (o.has_member ("status_mode"))
                     c.status_mode = o.get_string_member ("status_mode");
+                if (o.has_member ("setup_done"))
+                    c.setup_done = o.get_boolean_member ("setup_done");
+                if (o.has_member ("skipped_version"))
+                    c.skipped_version = o.get_string_member ("skipped_version");
                 parsed = true;
             } catch (Error e) {
                 warning ("config load failed: %s", e.message);
@@ -160,6 +176,8 @@ namespace TgWsProxy {
             b.set_member_name ("autostart"); b.add_boolean_value (autostart);
             b.set_member_name ("status_template"); b.add_string_value (status_template);
             b.set_member_name ("status_mode"); b.add_string_value (status_mode);
+            b.set_member_name ("setup_done"); b.add_boolean_value (setup_done);
+            b.set_member_name ("skipped_version"); b.add_string_value (skipped_version);
             b.end_object ();
 
             var gen = new Json.Generator ();

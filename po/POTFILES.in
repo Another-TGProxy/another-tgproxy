@@ -3,11 +3,13 @@ src/application.vala
 src/ui/window.vala
 src/ui/home-view.vala
 src/ui/settings-view.vala
+src/ui/setup-wizard.vala
 src/daemon/daemon.vala
 src/controller/service.vala
 data/ui/window.blp
 data/ui/home-view.blp
 data/ui/settings-view.blp
 data/ui/log-view.blp
+data/ui/setup-wizard.blp
 data/space.ampernic.AnotherTGProxy.desktop.in.in
 data/space.ampernic.AnotherTGProxy.metainfo.xml.in.in

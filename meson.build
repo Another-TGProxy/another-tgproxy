@@ -155,7 +155,7 @@ endif
 
 blueprint_compiler = find_program('blueprint-compiler')
 ui_targets = []
-foreach view : ['window', 'home-view', 'settings-view', 'log-view']
+foreach view : ['window', 'home-view', 'settings-view', 'log-view', 'setup-wizard']
   ui_targets += custom_target(view + '.ui',
     input: 'data/ui' / (view + '.blp'),
     output: view + '.ui',
@@ -183,6 +183,7 @@ sources = files(
   'src/ui/home-view.vala',
   'src/ui/settings-view.vala',
   'src/ui/log-view.vala',
+  'src/ui/setup-wizard.vala',
   'src/controller/client.vala',
   'src/controller/service.vala',
   'src/android/engine_host.vala',   # #if ANDROID — empty elsewhere
