@@ -387,14 +387,8 @@ namespace TgWsProxy {
         }
 
         private void open_uri (string uri) {
-            if (uri == "") return;
-            var launcher = new Gtk.UriLauncher (uri);
-            launcher.launch.begin (this.get_root () as Gtk.Window, null, (obj, res) => {
-                try {
-                    launcher.launch.end (res);
-                } catch (Error e) {
-                    toast (_("Failed to open the link: %s").printf (e.message));
-                }
+            open_external_uri (this, uri, (message) => {
+                toast (_("Failed to open the link: %s").printf (message));
             });
         }
     }

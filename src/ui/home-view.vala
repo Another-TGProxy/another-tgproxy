@@ -44,14 +44,8 @@ namespace TgWsProxy {
         }
 
         private void open_in_telegram () {
-            if (current_link == "") return;
-            var launcher = new Gtk.UriLauncher (current_link);
-            launcher.launch.begin (get_root () as Gtk.Window, null, (obj, res) => {
-                try {
-                    launcher.launch.end (res);
-                } catch (Error e) {
-                    toast (_("Failed to open Telegram: %s").printf (e.message));
-                }
+            open_external_uri (this, current_link, (message) => {
+                toast (_("Failed to open Telegram: %s").printf (message));
             });
         }
 

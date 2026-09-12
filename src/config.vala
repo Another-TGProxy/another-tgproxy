@@ -5,7 +5,9 @@ namespace TgWsProxy {
     // in the About dialog — the two places we control ourselves. It cannot be a
     // Telegram-promoted channel: that needs a proxy tag, which only travels
     // inside the middle-proxy RPC this proxy deliberately does not speak.
-    public const string SUPPORT_CHANNEL = "https://t.me/another_tgproxy";
+    // A tg:// link hands the channel to the installed client; the t.me web page
+    // is blocked in the countries this proxy exists for.
+    public const string SUPPORT_CHANNEL = "tg://resolve?domain=another_tgproxy";
 
     // App paths (Linux: $XDG_CONFIG_HOME/AnotherTGProxy).
     namespace Paths {

@@ -425,6 +425,10 @@ namespace TgWsProxy {
                 translator_credits = _("translator-credits")
             };
             about.add_link (_("Support channel"), SUPPORT_CHANNEL);
+            about.activate_link.connect ((uri) => {
+                open_external_uri (this, uri);
+                return true;
+            });
             about.present (this);
         }
     }

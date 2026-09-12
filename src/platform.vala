@@ -1,9 +1,40 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 namespace TgWsProxy {
 
+    public delegate void UriFailedFunc (string message);
+
+    // Opens an external URI, in practice a tg:// link. GIO resolves custom
+    // schemes from the desktop handler on Linux and macOS, but knows nothing of
+    // them on Windows, where only libstation's ShellExecute path works.
+    public void open_external_uri (Gtk.Widget? parent, string uri,
+                                   owned UriFailedFunc? failed = null) {
+        if (uri == "") return;
+#if WINDOWS
+        try {
+            Station.open_uri (uri);
+        } catch (Error e) {
+            if (failed != null) failed (e.message);
+        }
+#else
+        var launcher = new Gtk.UriLauncher (uri);
+        launcher.launch.begin (parent != null ? parent.get_root () as Gtk.Window : null,
+                               null, (obj, res) => {
+            try {
+                launcher.launch.end (res);
+            } catch (Error e) {
+                if (failed != null) failed (e.message);
+            }
+        });
+#endif
+    }
+
     public enum OsKind { LINUX, WINDOWS, MACOS, OTHER }
 
     public enum DeliveryKind { NATIVE, FLATPAK, SNAP, APPIMAGE }
+
+    // How a downloaded release is installed, which also decides which asset of
+    // the release this copy of the app wants.
+    public enum UpdateKind { NONE, WINDOWS_SETUP, MACOS_DMG, ANDROID_APK, APPIMAGE }
 
     // How the proxy's live background status is surfaced to the user.
     public enum StatusMode {
