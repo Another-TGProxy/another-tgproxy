@@ -104,6 +104,17 @@ If large files stall while chats and images are fine, turn the booster off:
 client has no such mode and downloads fine through the very same proxy, which
 makes it a quick way to tell a client problem from a proxy one.
 
+## ⚠️ Another client left on an old secret
+
+When the proxy's secret changes (a reinstall, a reset), a client still holding
+the old one keeps hammering away: Telegram cannot tell a wrong secret from an
+unreachable server, so it reconnects the moment each attempt is refused —
+hundreds of times a second in practice. The client that does work starts
+dropping out.
+
+The app shows a banner for this and offers the current link. Re-add the proxy
+in that client (or turn the proxy off there) and it stops.
+
 ## 📦 Distribution
 
 - **Android.** The foreground service (`specialUse`) + battery-optimization
