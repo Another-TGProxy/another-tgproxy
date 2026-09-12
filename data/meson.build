@@ -80,14 +80,17 @@ configure_file(
 endif  # not windows
 
 # Icons renamed to the profile-relevant app-id so a Devel build resolves its own.
-# The development profile ships its striped Devel variant (scalable only).
-scalable_icon = is_devel ? base + '.Devel.svg' : base + '.svg'
+# The development profile and prerelease tags ship the striped Devel variant
+# (scalable only); the raster sizes would otherwise win the icon lookup and show
+# the stable artwork in the About dialog.
+striped_icon = is_devel or is_prerelease
+scalable_icon = striped_icon ? base + '.Devel.svg' : base + '.svg'
 install_data(
   'icons/hicolor/scalable/apps' / scalable_icon,
   install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable' / 'apps',
   rename: app_id_relevant + '.svg',
 )
-if not is_devel
+if not striped_icon
   foreach sz : ['64', '128', '256']
     install_data(
       'icons/hicolor' / (sz + 'x' + sz) / 'apps' / (base + '.png'),

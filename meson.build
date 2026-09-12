@@ -55,7 +55,8 @@ conf.set10('IS_DEVEL', is_devel)
 # between the stable and beta channels has to update in place. Giving betas the
 # .Devel identity would install them alongside as a separate app with separate
 # settings, which is not what a test build of the same program should do.
-conf.set10('IS_PRERELEASE', app_version.contains('-'))
+is_prerelease = app_version.contains('-')
+conf.set10('IS_PRERELEASE', is_prerelease)
 config_h = configure_file(output: 'build-config.h', configuration: conf)
 
 # On Android GLib/GTK fall back to proxy-libintl built -DSTUB_ONLY, so gettext is
