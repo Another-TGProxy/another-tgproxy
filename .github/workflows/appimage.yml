@@ -39,6 +39,7 @@ jobs:
             pkg-config git wget ca-certificates file desktop-file-utils patchelf \
             libgtk-4-dev libadwaita-1-dev libjson-glib-dev libssl-dev \
             libglib2.0-dev libglib2.0-bin \
+            glib-networking \
             librsvg2-common gdk-pixbuf2.0-bin adwaita-icon-theme \
             gsettings-desktop-schemas libgtk-4-bin
 
@@ -83,13 +84,24 @@ jobs:
             /usr/lib/$ARCH-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders/*.so \
             /usr/lib/$ARCH-linux-gnu/gio/modules/*.so
           # Bundle the Adwaita icon theme so the UI's symbolic icons resolve.
-          cp -r /usr/share/icons/Adwaita AppDir/usr/share/icons/ 2>/dev/null || true
+          cp -r /usr/share/icons/Adwaita AppDir/usr/share/icons/
           # AppImage AppDir entrypoint: AppRun -> sharun; .app names the bin to launch.
           ln -f AppDir/sharun AppDir/AppRun
           echo 'another-tgproxy' > AppDir/.app
           cp "AppDir/usr/share/applications/$APP_ID.desktop" AppDir/
           cp "AppDir/usr/share/icons/hicolor/scalable/apps/$APP_ID.svg" AppDir/
           cp "AppDir/$APP_ID.svg" AppDir/.DirIcon
+
+      # Both of these went missing silently once and shipped a release that could
+      # not check for updates and drew broken icons, so the build fails on them now.
+      - name: Check the bundle is complete
+        run: |
+          tls=$(ls AppDir/shared/lib/gio/modules/libgio{gnutls,openssl}.so 2>/dev/null | wc -l)
+          [ "$tls" -gt 0 ] || { echo "::error::no GIO TLS backend bundled — HTTPS (the update check) would fail"; exit 1; }
+          ls AppDir/shared/lib/gdk-pixbuf-2.0/*/loaders/*svg* >/dev/null 2>&1 \
+            || { echo "::error::no SVG pixbuf loader bundled — symbolic icons would not render"; exit 1; }
+          [ -f AppDir/usr/share/icons/Adwaita/index.theme ] \
+            || { echo "::error::Adwaita icon theme missing from the bundle"; exit 1; }
 
       - name: Pack AppImage (uruntime + DwarFS)
         run: |

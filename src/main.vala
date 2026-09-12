@@ -16,8 +16,15 @@ int main (string[] args) {
     // the baked-in LOCALEDIR doesn't exist; $APPDIR points at the bundle root.
     string localedir = Build.LOCALEDIR;
     var appdir = Environment.get_variable ("APPDIR");
-    if (appdir != null && appdir != "")
+    if (appdir != null && appdir != "") {
         localedir = appdir + "/usr/share/locale";
+        // GLib looks for GIO modules under the prefix it was built with, which is
+        // the CI container's, so the bundled glib-networking — the TLS backend the
+        // update check needs over HTTPS — is never loaded on the user's machine.
+        if (Environment.get_variable ("GIO_EXTRA_MODULES") == null)
+            Environment.set_variable ("GIO_EXTRA_MODULES",
+                                      appdir + "/shared/lib/gio/modules", true);
+    }
 #if ANDROID
     // The catalogs ship under the extracted assets, which gdk-android exposes as
     // XDG_DATA_DIRS (<filesDir>/share); the baked-in absolute LOCALEDIR is wrong.
