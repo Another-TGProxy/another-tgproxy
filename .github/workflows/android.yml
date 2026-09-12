@@ -104,8 +104,23 @@ jobs:
             ot=${pair%%:*}; triple=${pair##*:}
             cp -r "$RUNNER_TEMP/openssl-src" "$RUNNER_TEMP/ob-$triple"
             ( cd "$RUNNER_TEMP/ob-$triple"
+              # 15-android.conf reads -D__ANDROID_API__ only to pick the compiler
+              # "<triple><api>-clang"; drop the flag and $api silently falls back to
+              # the NDK's newest platform (meta/platforms.json "max"), producing a
+              # library that won't run on Android 8. Setting CC by hand doesn't help
+              # either: with no legacy sysroot the config overwrites CC regardless.
               ./Configure "$ot" "-D__ANDROID_API__=$ANDROID_API" \
                 no-shared no-tests no-apps --prefix="$RUNNER_TEMP/ossl-$triple"
+              # Configure has baked the API into CC, so the define has done its job.
+              # Left in CPPFLAGS it only redefines what android$ANDROID_API-clang
+              # already sets from __ANDROID_MIN_SDK_VERSION__, warning once per
+              # source file. Strip it from the compile flags only -- OPTIONS and
+              # CONFIGURE_ARGS keep it, so a reconfigure still knows the API -- and
+              # assert CC still carries it, so a silent fallback to the NDK's newest
+              # platform cannot slip through.
+              sed -i -E '/^CPPFLAGS(_Q)?=/ s/ *-D__ANDROID_API__=[0-9]+//g' Makefile
+              grep -qE "^CC=.*-linux-android$ANDROID_API-clang" Makefile \
+                || { echo "::error::OpenSSL CC lost the API level"; grep -m1 "^CC=" Makefile; exit 1; }
               make -j"$(nproc)" >/dev/null
               make install_sw >/dev/null )
             cp -v "$RUNNER_TEMP/ossl-$triple/lib/libssl.a" \
