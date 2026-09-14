@@ -1,5 +1,23 @@
 ## What's new
 
+**Telegram no longer reports the proxy as misconfigured.** A data centre is
+fronted by two hosts that hold different keys — one for chats, one for media —
+and the proxy treated them as interchangeable: a session whose first attempt
+failed was retried against the other one, which does not know its key. Telegram
+answered with a refusal, and on one of its forms both the desktop and the
+Android client switch the proxy off by themselves. The Cloudflare relays were
+the same mistake from the other side: they front only the first host, so every
+media session sent through them was refused. Sessions now keep to their own
+host. On a phone where the direct route fails constantly, refusals dropped from
+about twelve a minute to under one.
+
+**Android permissions are asked for in the wizard.** The notification and the
+battery exemption are what keep the proxy alive once the screen goes off, and
+the system dialog used to appear before the app had drawn anything — and again
+on every return to it. They now have a step that says what each one is for and
+shows whether it is granted, with a button that opens the settings screen where
+Android no longer offers a dialog. Setup does not move on without them.
+
 **Setup wizard on first launch.** Walks through the settings that actually need
 a decision — updates, port and secret, autostart, where to show status — then
 starts the proxy and hands over the connection link. Steps with nothing to ask
@@ -49,6 +67,23 @@ wizard has already asked about it.
 ---
 
 ## Что нового
+
+**Telegram больше не считает прокси неправильно настроенным.** У дата-центра два
+адреса, и ключи у них разные: один для переписки, другой для медиа. Прокси считал
+их взаимозаменяемыми — если первая попытка не удавалась, сессия уходила на
+соседний адрес, который её ключа не знает. Telegram отвечал отказом, а на одну из
+форм этого отказа и десктопный, и Android-клиент сами отключают прокси. С
+ретрансляторами Cloudflare была та же ошибка с другой стороны: за ними стоит
+только первый адрес, поэтому все медиа-сессии через них получали отказ. Теперь
+сессия остаётся на своём адресе. На телефоне, где прямой маршрут постоянно не
+проходит, отказов стало меньше одного в минуту вместо примерно двенадцати.
+
+**Разрешения Android запрашиваются в мастере.** Уведомление и снятие ограничений
+батареи — это то, что сохраняет прокси живым после выключения экрана. Раньше
+системный диалог выскакивал до того, как приложение успевало нарисовать окно, и
+повторялся при каждом возврате в него. Теперь под них отведён шаг, где сказано,
+зачем нужно каждое, видно, выдано ли оно, а кнопка ведёт в системные настройки,
+если диалог Android больше не показывает. Без них настройка дальше не идёт.
 
 **Мастер первичной настройки.** Проводит по тем настройкам, где действительно
 нужно решение: обновления, порт и секрет, автозапуск, где показывать статус.
