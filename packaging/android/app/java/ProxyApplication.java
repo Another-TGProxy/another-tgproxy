@@ -9,7 +9,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageInstaller;
-import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 
@@ -116,14 +115,11 @@ public class ProxyApplication extends RuntimeApplication {
 		}
 	}
 
-	private void onForeground(Activity activity) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-				&& checkSelfPermission("android.permission.POST_NOTIFICATIONS")
-						!= PackageManager.PERMISSION_GRANTED) {
-			activity.requestPermissions(
-					new String[] {"android.permission.POST_NOTIFICATIONS"}, 1001);
-		}
-
+	// POST_NOTIFICATIONS is asked for in the setup wizard, on the step that
+	// explains what the notification is for. Asking here instead threw the
+	// system dialog at the user before the app had drawn anything, and repeated
+	// it on every resume until they gave in.
+	private void onForeground() {
 		// Started on every resume, not once per process. The service can die
 		// while we are backgrounded -- the system reclaims it, or a timeout fires
 		// -- and a process without a live foreground service drops to a cached
@@ -145,7 +141,7 @@ public class ProxyApplication extends RuntimeApplication {
 	}
 
 	private final class LifecycleHook implements Application.ActivityLifecycleCallbacks {
-		@Override public void onActivityResumed(Activity activity) { onForeground(activity); }
+		@Override public void onActivityResumed(Activity activity) { onForeground(); }
 		@Override public void onActivityCreated(Activity activity, Bundle state) { }
 		@Override public void onActivityStarted(Activity activity) { }
 		@Override public void onActivityPaused(Activity activity) { }

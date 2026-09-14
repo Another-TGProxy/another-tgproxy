@@ -99,7 +99,6 @@ namespace TgWsProxy {
 #endif
 
 #if ANDROID
-        static unowned Application? android_self = null;
         bool android_wired = false;
         bool battery_dialog_open = false;
 
@@ -112,33 +111,33 @@ namespace TgWsProxy {
         void wire_android (Gtk.Window win) {
             if (android_wired) return;
             android_wired = true;
-            android_self = this;
-            Station.android_set_resume_handler (android_resume);
+            Station.android_add_resume_handler (() => {
+                var w = this.active_window;
+                if (w != null) check_battery (w);
+            });
             win.map.connect (() => {
                 var surface = win.get_surface ();
                 if (surface == null) return;
                 Station.android_foreground_bind (surface,
                     "space.ampernic.anothertgproxy.ProxyApplication",
                     "space.ampernic.anothertgproxy.ProxyService");
-                // Android 13+: the foreground-service notification (our status
-                // display) needs the POST_NOTIFICATIONS runtime grant.
-                Station.android_request_notification_permission (surface);
                 check_battery (win);
             });
         }
 
-        // Invoked on the GTK main thread on every activity resume.
-        static void android_resume () {
-            if (android_self == null) return;
-            var win = android_self.active_window;
-            if (win != null) android_self.check_battery (win);
-        }
-
+        // The wizard asks for both permissions, on a step that says what they are
+        // for; this is the follow-up for an app that is already set up and had the
+        // background exemption taken away later. Nothing here raises a permission
+        // dialog on its own — that only happens on a button the user pressed.
         void check_battery (Gtk.Window win) {
             if (battery_dialog_open) return;
+            var w = win as Window;
+            if (w != null && (w.setup_active || !w.setup_done)) return;
             var surface = win.get_surface ();
             if (surface == null) return;
-            if (Station.android_battery_unrestricted (surface)) return;
+            if (Station.android_permission_state (surface, Station.Permission.BACKGROUND)
+                == Station.PermissionState.GRANTED)
+                return;
             show_battery_dialog (win, surface);
         }
 
@@ -154,7 +153,7 @@ namespace TgWsProxy {
             dialog.response.connect ((resp) => {
                 battery_dialog_open = false;
                 if (resp == "settings")
-                    Station.android_request_battery_unrestricted (surface);
+                    Station.android_permission_request (surface, Station.Permission.BACKGROUND);
             });
             dialog.present (win);
         }

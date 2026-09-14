@@ -136,7 +136,12 @@ namespace TgWsProxy {
 
         // Run the first-run wizard, once. Called after the window is on screen so
         // the dialog has something to attach to.
-        private bool setup_active = false;
+        // Read by the Android permission checks: the wizard asks for them itself,
+        // and a dialog on top of it asks the same thing twice. `setup_done` covers
+        // the gap before the wizard opens — it only opens after the window is
+        // presented, and the checks run on the map that presenting causes.
+        public bool setup_active { get; private set; default = false; }
+        public bool setup_done { get { return cfg.setup_done; } }
         // Set once the wizard has had its say about updates this session.
         private bool update_dialog_suppressed = false;
 

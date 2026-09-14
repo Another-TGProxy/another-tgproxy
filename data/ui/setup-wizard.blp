@@ -50,10 +50,25 @@ template $TgWsProxySetupWizard : Adw.Dialog {
           child: Adw.StatusPage {
             title: _("Checking for updates…");
 
-            child: Adw.Spinner {
-              width-request: 48;
-              height-request: 48;
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
               halign: center;
+
+              Adw.Spinner {
+                width-request: 48;
+                height-request: 48;
+                halign: center;
+              }
+
+              // Appears only once the check has taken long enough to look stuck,
+              // so a release server that never answers cannot hold up setup.
+              Gtk.Button skip_check_btn {
+                label: _("Skip the check");
+                halign: center;
+                visible: false;
+                styles ["flat"]
+              }
             };
           };
         }
@@ -166,6 +181,54 @@ template $TgWsProxySetupWizard : Adw.Dialog {
                 Adw.EntryRow host_row {
                   title: _("Host");
                 }
+              }
+            }
+          };
+        };
+      }
+
+      // Android only: the proxy lives inside a foreground service, and that
+      // service needs a visible notification and freedom from battery
+      // optimisation to survive. Asking here, where the user is already setting
+      // things up, beats a dialog that interrupts them later.
+      Adw.StatusPage permissions_page {
+        icon-name: "emblem-system-symbolic";
+        title: _("Permissions");
+        description: _("Android stops apps in the background unless they hold these.");
+
+        child: Adw.Clamp {
+          maximum-size: 400;
+
+          child: Adw.PreferencesGroup {
+            Adw.ActionRow notif_row {
+              title: _("Notification");
+              subtitle: _("Shows that the proxy is running; Android requires it to keep the app alive.");
+
+              [prefix]
+              Gtk.Image notif_icon {
+                icon-name: "dialog-warning-symbolic";
+              }
+
+              [suffix]
+              Gtk.Button notif_btn {
+                label: _("Allow");
+                valign: center;
+              }
+            }
+
+            Adw.ActionRow battery_row {
+              title: _("Background work");
+              subtitle: _("Without it the system stops the proxy after a while.");
+
+              [prefix]
+              Gtk.Image battery_icon {
+                icon-name: "dialog-warning-symbolic";
+              }
+
+              [suffix]
+              Gtk.Button battery_btn {
+                label: _("Allow");
+                valign: center;
               }
             }
           };

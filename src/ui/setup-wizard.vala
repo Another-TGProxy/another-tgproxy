@@ -15,6 +15,8 @@ namespace TgWsProxy {
         private const uint APPLY_TIMEOUT_SEC = 15;
         // How long to wait for a release check before treating silence as "current".
         private const uint UPDATE_PROBE_SEC = 8;
+        // After this long the check looks stuck, so offer a way past it.
+        private const uint UPDATE_SKIP_HINT_SEC = 3;
 
         [GtkChild] private unowned Gtk.Stack steps;
         [GtkChild] private unowned Gtk.Box dots_box;
@@ -22,11 +24,17 @@ namespace TgWsProxy {
         [GtkChild] private unowned Adw.StatusPage update_status;
         [GtkChild] private unowned Gtk.Button notes_btn;
         [GtkChild] private unowned Gtk.Button skip_update_btn;
+        [GtkChild] private unowned Gtk.Button skip_check_btn;
         [GtkChild] private unowned Gtk.ProgressBar dl_bar;
         [GtkChild] private unowned Adw.StatusPage install_status;
         [GtkChild] private unowned Adw.StatusPage connection_page;
+        [GtkChild] private unowned Adw.StatusPage permissions_page;
 #if ANDROID
         [GtkChild] private unowned Adw.StatusPage autostart_page;
+        [GtkChild] private unowned Gtk.Image notif_icon;
+        [GtkChild] private unowned Gtk.Image battery_icon;
+        [GtkChild] private unowned Gtk.Button notif_btn;
+        [GtkChild] private unowned Gtk.Button battery_btn;
 #endif
         [GtkChild] private unowned Adw.StatusPage status_page;
         [GtkChild] private unowned Gtk.Stack done_stack;
@@ -58,6 +66,7 @@ namespace TgWsProxy {
         private ServiceController service;
         private Station.Updates? updater = null;
         private uint update_timer = 0;
+        private uint skip_hint_timer = 0;
         private string update_version = "";
         private string update_notes = "";
         private GenericArray<Gtk.Widget> pages = new GenericArray<Gtk.Widget> ();
@@ -111,9 +120,7 @@ namespace TgWsProxy {
                 double ay = (vy < 0) ? -vy : vy;
                 if (ax < 200 || ax < ay) return;   // too slow, or a vertical scroll
                 if (vx < 0) {
-                    if (!finished () && !offering_update () && !installing_update ()
-                        && !downloading_update () && step_ready (current ()))
-                        go (1);
+                    if (can_advance ()) go (1);
                 } else {
                     go (-1);
                 }
@@ -131,6 +138,12 @@ namespace TgWsProxy {
             // Saying no here is about this release, not about updates in general:
             // remember it so nothing offers the same version again five seconds later.
             skip_update_btn.clicked.connect (skip_this_version);
+            // Leaves the check running in the background: the window picks its
+            // answer up once the wizard is done, so nothing is lost by moving on.
+            skip_check_btn.clicked.connect (() => {
+                clear_update_timers ();
+                go (1);
+            });
             if (updater != null) {
                 updater.available.connect (on_update_available);
                 // The step's own pages decide what the primary button says and
@@ -179,13 +192,67 @@ namespace TgWsProxy {
             // display, so neither step has a question to ask.
             steps.remove (autostart_page);
             steps.remove (status_page);
+            wire_permissions ();
 #else
+            // Nothing else asks the user for permission to run.
+            steps.remove (permissions_page);
             var p = Platform.get_default ();
             fill_mode_toggles (status_mode_group, p, cfg.status_mode);
             if (status_mode_group.n_toggles < 2)
                 steps.remove (status_page);
 #endif
         }
+
+#if ANDROID
+        private bool perms_ok = false;
+        private ulong resume_id = 0;
+
+        private void wire_permissions () {
+            notif_btn.clicked.connect (() => ask (Station.Permission.NOTIFICATIONS));
+            battery_btn.clicked.connect (() => ask (Station.Permission.BACKGROUND));
+            // Both are granted in a system screen, and coming back is all the app
+            // is told about it.
+            resume_id = Station.android_add_resume_handler (refresh_permissions);
+            closed.connect (() => {
+                Station.android_remove_resume_handler (resume_id);
+                resume_id = 0;
+            });
+            map.connect (refresh_permissions);
+        }
+
+        private void ask (Station.Permission perm) {
+            var surface = get_root ()?.get_surface ();
+            if (surface == null) return;
+            Station.android_permission_request (surface, perm);
+            // A granted runtime permission arrives through the permission callback
+            // rather than on return from the activity, so there is no resume to
+            // wait for — re-read shortly after asking.
+            Timeout.add (700, () => { refresh_permissions (); return Source.REMOVE; });
+        }
+
+        public void refresh_permissions () {
+            var surface = get_root ()?.get_surface ();
+            if (surface == null) return;
+            var notif = Station.android_permission_state (surface, Station.Permission.NOTIFICATIONS);
+            var battery = Station.android_permission_state (surface, Station.Permission.BACKGROUND);
+            set_permission_row (notif_icon, notif_btn, notif);
+            set_permission_row (battery_icon, battery_btn, battery);
+            perms_ok = notif == Station.PermissionState.GRANTED
+                    && battery == Station.PermissionState.GRANTED;
+            update_nav ();
+        }
+
+        // The button says what pressing it will actually do: raise the system
+        // dialog, or go to the settings screen that is the only way left.
+        private static void set_permission_row (Gtk.Image icon, Gtk.Button btn,
+                                                Station.PermissionState state) {
+            bool granted = state == Station.PermissionState.GRANTED;
+            btn.visible = !granted;
+            btn.label = (state == Station.PermissionState.NEEDS_SETTINGS)
+                ? _("Settings") : _("Allow");
+            icon.icon_name = granted ? "object-select-symbolic" : "dialog-warning-symbolic";
+        }
+#endif
 
         private void collect_pages () {
             pages = new GenericArray<Gtk.Widget> ();
@@ -231,6 +298,10 @@ namespace TgWsProxy {
             mark_dots (idx);
             if (pages[idx] == update_stack)
                 probe_update ();
+#if ANDROID
+            if (pages[idx] == permissions_page)
+                refresh_permissions ();
+#endif
         }
 
         // libstation only signals when something IS available, so "no update" is
@@ -239,6 +310,12 @@ namespace TgWsProxy {
             if (updater == null || update_stack.visible_child_name != "checking")
                 return;
             updater.check ();
+            skip_check_btn.visible = false;
+            skip_hint_timer = Timeout.add_seconds (UPDATE_SKIP_HINT_SEC, () => {
+                skip_hint_timer = 0;
+                skip_check_btn.visible = update_stack.visible_child_name == "checking";
+                return Source.REMOVE;
+            });
             update_timer = Timeout.add_seconds (UPDATE_PROBE_SEC, () => {
                 update_timer = 0;
                 if (update_stack.visible_child_name == "checking")
@@ -248,10 +325,7 @@ namespace TgWsProxy {
         }
 
         private void on_update_available (string version, string url, string notes) {
-            if (update_timer != 0) {
-                Source.remove (update_timer);
-                update_timer = 0;
-            }
+            clear_update_timers ();
             update_version = version;
             update_notes = notes;
             update_status.description = Platform.get_default ().updates_installable ()
@@ -285,9 +359,30 @@ namespace TgWsProxy {
             dlg.present (this);
         }
 
+        // The one answer to "may the wizard move on from here". Next and the swipe
+        // both ask it: a step that blocks one has to block the other, and keeping
+        // two lists of conditions in step is how the swipe ended up walking past
+        // the update check.
+        private bool can_advance () {
+            int idx = current ();
+            if (idx >= pages.length || pages[idx] == done_stack)
+                return false;
+            if (checking_update () || downloading_update () || installing_update ()
+                || offering_update () || announcing_update ())
+                return false;
+            return step_ready (idx);
+        }
+
         private bool step_ready (int idx) {
             if (pages[idx] == connection_page)
                 return secret_row.text.strip ().length == 32;
+#if ANDROID
+            // Both are what keeps the proxy alive once the screen goes off. Moving
+            // on without them produces an app that looks set up and dies quietly
+            // ten minutes later, so the step holds until they are granted.
+            if (pages[idx] == permissions_page)
+                return perms_ok;
+#endif
             return true;
         }
 
@@ -404,7 +499,11 @@ namespace TgWsProxy {
             // While the check is still running there is nothing to decide yet, and
             // a visible Next is too easy to hit past the step.
             next_btn.visible = (!last || finished ()) && !checking_update ();
-            next_btn.sensitive = step_ready (idx) && !downloading_update ();
+            // On the pages where the button does something other than move on it
+            // stays live; everywhere else it is the same gate the swipe goes through.
+            next_btn.sensitive = finished () || installing_update ()
+                              || offering_update () || announcing_update ()
+                              || can_advance ();
             if (finished ())
                 next_btn.label = _("Start using");
             else if (installing_update ())
@@ -479,10 +578,19 @@ namespace TgWsProxy {
                 Source.remove (apply_timer);
                 apply_timer = 0;
             }
+            clear_update_timers ();
+        }
+
+        private void clear_update_timers () {
             if (update_timer != 0) {
                 Source.remove (update_timer);
                 update_timer = 0;
             }
+            if (skip_hint_timer != 0) {
+                Source.remove (skip_hint_timer);
+                skip_hint_timer = 0;
+            }
+            skip_check_btn.visible = false;
         }
 
         private void open_uri (string uri) {
