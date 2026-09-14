@@ -9,7 +9,7 @@
 # libstation on every platform. Bump it deliberately via tools/pin-deps.sh.
 [wrap-git]
 url = https://github.com/Ampernic/libstation.git
-revision = ca8a71ced1b60bfcaf8b3d8466a97a448379e1eb
+revision = c4f0d824f30f63cf6f73fefe28d77e31d086d96b
 
 [provide]
 libstation-1 = station_dep
