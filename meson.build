@@ -55,7 +55,13 @@ conf.set10('IS_DEVEL', is_devel)
 # between the stable and beta channels has to update in place. Giving betas the
 # .Devel identity would install them alongside as a separate app with separate
 # settings, which is not what a test build of the same program should do.
-is_prerelease = app_version.contains('-')
+# Matched on the keyword, not on any '-': a distribution passes its own release
+# into release_version (2.2.0-alt1), and treating that as a beta would drop the
+# raster icons the package lists and stripe a stable build's header.
+is_prerelease = false
+foreach kw : ['alpha', 'beta', 'rc']
+  is_prerelease = is_prerelease or app_version.to_lower().contains('-' + kw)
+endforeach
 conf.set10('IS_PRERELEASE', is_prerelease)
 config_h = configure_file(output: 'build-config.h', configuration: conf)
 
