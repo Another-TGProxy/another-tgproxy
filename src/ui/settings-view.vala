@@ -57,6 +57,13 @@ namespace TgWsProxy {
             channel_row.selected = (ch == "beta") ? 1 : 0;
             status_row.text = cfg.status_template;
             vulkan_row.active = cfg.vulkan_renderer;
+            // The renderer choice is an Android question: mobile GPUs are where
+            // the GL and Vulkan paths differ enough to be worth switching, and
+            // where drivers make it a gamble. On a desktop it is one more knob
+            // nobody should touch.
+#if !ANDROID
+            vulkan_row.visible = false;
+#endif
 
             regen_btn.clicked.connect (() => { secret_row.text = Config.gen_secret (); });
             verify_cf_row.notify["active"].connect (() => {
@@ -90,6 +97,7 @@ namespace TgWsProxy {
 #endif
         }
 
+#if !ANDROID
         private void setup_status_modes () {
             fill_mode_toggles (status_mode_group, Platform.get_default (), cfg.status_mode);
             update_text_visibility ();
@@ -100,6 +108,7 @@ namespace TgWsProxy {
             var m = StatusMode.from_id (status_mode_group.active_name ?? "window");
             status_text_group.visible = m != StatusMode.WINDOW;
         }
+#endif
 
         private void save_settings () {
             cfg.host = host_row.text.strip ();

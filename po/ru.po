@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: another-tgproxy\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-14 12:17+0300\n"
+"POT-Creation-Date: 2026-09-14 13:03+0300\n"
 "Language-Team: Russian\n"
 "Language: ru\n"
 "MIME-Version: 1.0\n"
@@ -50,6 +50,62 @@ msgstr "Another TGProxy — остановлен"
 #: src/application.vala:216
 msgid "Another TGProxy — running"
 msgstr "Another TGProxy — работает"
+
+#: src/platform.vala:70 src/platform.vala:75
+msgid "Window"
+msgstr "Окно"
+
+#: src/platform.vala:71
+msgid "Tray"
+msgstr "Трей"
+
+#: src/platform.vala:72
+msgid "Background"
+msgstr "Фон"
+
+#: src/platform.vala:73
+msgid "Quick Settings"
+msgstr "Быстрые настройки"
+
+#: src/platform.vala:74 data/ui/setup-wizard.blp:204
+msgid "Notification"
+msgstr "Уведомление"
+
+#: src/tray.vala:36 src/qshub.vala:29
+msgid "Open"
+msgstr "Открыть"
+
+#: src/tray.vala:37 src/qshub.vala:30 data/ui/home-view.blp:67
+#: data/ui/setup-wizard.blp:308
+msgid "Open in Telegram"
+msgstr "Открыть в Telegram"
+
+#: src/tray.vala:39 src/tray.vala:58 data/ui/window.blp:44
+#: data/ui/home-view.blp:24
+msgid "Start"
+msgstr "Запустить"
+
+#: src/tray.vala:40 src/qshub.vala:31
+msgid "Restart"
+msgstr "Перезапустить"
+
+#: src/tray.vala:42 src/qshub.vala:32 src/ui/setup-wizard.vala:510
+#: data/ui/window.blp:6
+msgid "Quit"
+msgstr "Выход"
+
+#: src/tray.vala:58 data/ui/home-view.blp:36
+msgid "Stop"
+msgstr "Остановить"
+
+#: src/engine-runner.vala:32
+#, c-format
+msgid "Failed to bind %s:%d — port already in use"
+msgstr "Не удалось занять %s:%d — порт уже используется"
+
+#: src/android/engine_host.vala:66 src/daemon/daemon.vala:41
+msgid "Proxy stopped"
+msgstr "Прокси остановлен"
 
 #: src/ui/window.vala:71 src/ui/home-view.vala:35 src/ui/setup-wizard.vala:134
 msgid "Link copied"
@@ -237,10 +293,6 @@ msgstr ""
 msgid "Start using"
 msgstr "Начать пользоваться"
 
-#: src/ui/setup-wizard.vala:510 data/ui/window.blp:6
-msgid "Quit"
-msgstr "Выход"
-
 #: src/ui/setup-wizard.vala:512
 msgid "Update now"
 msgstr "Обновить"
@@ -270,10 +322,6 @@ msgstr ""
 #, c-format
 msgid "Failed to open the link: %s"
 msgstr "Не удалось открыть ссылку: %s"
-
-#: src/daemon/daemon.vala:41
-msgid "Proxy stopped"
-msgstr "Прокси остановлен"
 
 #. The proxy port may be held by a daemon we can't see from here — e.g.
 #. another instance running in a different environment (a Flatpak daemon
@@ -310,10 +358,6 @@ msgstr "О приложении"
 msgid "Main Menu"
 msgstr "Главное меню"
 
-#: data/ui/window.blp:44 data/ui/home-view.blp:24
-msgid "Start"
-msgstr "Запустить"
-
 #: data/ui/window.blp:71
 msgid "Home"
 msgstr "Главная"
@@ -322,17 +366,9 @@ msgstr "Главная"
 msgid "Log"
 msgstr "Журнал"
 
-#: data/ui/home-view.blp:36
-msgid "Stop"
-msgstr "Остановить"
-
 #: data/ui/home-view.blp:58 data/ui/setup-wizard.blp:300
 msgid "Connection link"
 msgstr "Ссылка для подключения"
-
-#: data/ui/home-view.blp:67 data/ui/setup-wizard.blp:308
-msgid "Open in Telegram"
-msgstr "Открыть в Telegram"
 
 #: data/ui/settings-view.blp:9
 msgid ""
@@ -542,10 +578,6 @@ msgstr "Разрешения"
 msgid "Android stops apps in the background unless they hold these."
 msgstr "Без них Android останавливает приложение в фоне."
 
-#: data/ui/setup-wizard.blp:204
-msgid "Notification"
-msgstr "Уведомление"
-
 #: data/ui/setup-wizard.blp:205
 msgid ""
 "Shows that the proxy is running; Android requires it to keep the app alive."
@@ -656,24 +688,6 @@ msgstr ""
 msgid "WebSocket"
 msgstr ""
 
-#~ msgid "Restart"
-#~ msgstr "Перезапустить"
-
-#~ msgid "Open"
-#~ msgstr "Открыть"
-
-#~ msgid "Window"
-#~ msgstr "Окно"
-
-#~ msgid "Tray"
-#~ msgstr "Трей"
-
-#~ msgid "Background"
-#~ msgstr "Фон"
-
-#~ msgid "Quick Settings"
-#~ msgstr "Быстрые настройки"
-
 #~ msgid "No system tray available in this environment"
 #~ msgstr "В этом окружении системный трей недоступен"
 
@@ -695,9 +709,6 @@ msgstr ""
 
 #~ msgid "Text template"
 #~ msgstr "Шаблон текста"
-
-#~ msgid "Failed to bind %s:%d — port already in use"
-#~ msgstr "Не удалось занять %s:%d — порт уже используется"
 
 #~ msgid "Service is not installed: %s not found"
 #~ msgstr "Служба не установлена: %s не найден"

@@ -1,5 +1,10 @@
 src/main.vala
 src/application.vala
+src/platform.vala
+src/tray.vala
+src/qshub.vala
+src/engine-runner.vala
+src/android/engine_host.vala
 src/ui/window.vala
 src/ui/home-view.vala
 src/ui/settings-view.vala
