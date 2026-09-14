@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: another-tgproxy\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-12 10:56+0300\n"
+"POT-Creation-Date: 2026-09-14 12:17+0300\n"
 "Language-Team: Russian\n"
 "Language: ru\n"
 "MIME-Version: 1.0\n"
@@ -23,11 +23,11 @@ msgstr "Another TGProxy уже открыт."
 msgid "OK"
 msgstr "ОК"
 
-#: src/application.vala:148
+#: src/application.vala:147
 msgid "Background operation"
 msgstr "Работа в фоне"
 
-#: src/application.vala:149
+#: src/application.vala:148
 msgid ""
 "To keep the proxy running in the background, disable battery optimization "
 "for this app. Otherwise Android may stop it after a while."
@@ -35,74 +35,78 @@ msgstr ""
 "Чтобы прокси продолжал работать в фоне, отключите оптимизацию батареи для "
 "этого приложения. Иначе Android через некоторое время остановит его."
 
-#: src/application.vala:150 src/ui/window.vala:245
+#: src/application.vala:149 src/ui/window.vala:256
 msgid "Later"
 msgstr "Позже"
 
-#: src/application.vala:151
+#: src/application.vala:150
 msgid "Open settings"
 msgstr "Открыть настройки"
 
-#: src/application.vala:176 src/application.vala:218
+#: src/application.vala:175 src/application.vala:217
 msgid "Another TGProxy — stopped"
 msgstr "Another TGProxy — остановлен"
 
-#: src/application.vala:217
+#: src/application.vala:216
 msgid "Another TGProxy — running"
 msgstr "Another TGProxy — работает"
+
+#: src/ui/window.vala:71 src/ui/home-view.vala:35 src/ui/setup-wizard.vala:134
+msgid "Link copied"
+msgstr "Ссылка скопирована"
 
 #. Show only the "What's new" block of the release notes, in the
 #. running language: the heading is gettext-translated, so a RU build
 #. asks for "Что нового" and gets that section of a bilingual body.
-#: src/ui/window.vala:121
+#: src/ui/window.vala:127
 msgid "What's new"
 msgstr "Что нового"
 
-#: src/ui/window.vala:196 src/ui/window.vala:212 src/ui/setup-wizard.vala:265
+#: src/ui/window.vala:207 src/ui/window.vala:223 src/ui/setup-wizard.vala:345
 #, c-format
 msgid "Update available: %s"
 msgstr "Доступно обновление: %s"
 
 #. "Later" means ask again; this one means never for this release.
-#: src/ui/window.vala:237
+#: src/ui/window.vala:248
 msgid "Skip this version"
 msgstr "Пропустить версию"
 
 #. Nothing to install where a repository owns the app: the offer is the
 #. release page, and updating stays the repository's job.
-#: src/ui/window.vala:250 src/ui/window.vala:362
+#: src/ui/window.vala:261 src/ui/window.vala:373
 msgid "Download"
 msgstr "Скачать"
 
-#: src/ui/window.vala:250
+#: src/ui/window.vala:261
 msgid "Release page"
 msgstr "Страница релиза"
 
-#: src/ui/window.vala:324 src/ui/setup-wizard.vala:402
+#: src/ui/window.vala:335 src/ui/setup-wizard.vala:516
 msgid "Downloading…"
 msgstr "Скачивание…"
 
-#: src/ui/window.vala:364 src/ui/setup-wizard.vala:371
+#: src/ui/window.vala:375 src/ui/setup-wizard.vala:479
 #, c-format
 msgid "Download failed: %s"
 msgstr "Не удалось скачать: %s"
 
-#: src/ui/window.vala:377
+#: src/ui/window.vala:388
 #, c-format
 msgid "Could not start installer: %s"
 msgstr "Не удалось запустить установщик: %s"
 
-#: src/ui/window.vala:392
+#: src/ui/window.vala:403
 #, c-format
 msgid "Could not open the disk image: %s"
 msgstr "Не удалось открыть образ диска: %s"
 
-#: src/ui/window.vala:407
+#: src/ui/window.vala:418
 #, c-format
 msgid "Could not replace the AppImage: %s"
 msgstr "Не удалось заменить AppImage: %s"
 
-#: src/ui/window.vala:427
+#: src/ui/window.vala:438
 msgid ""
 "Confirm the installation in the system installer. The app restarts on the "
 "new version."
@@ -110,7 +114,7 @@ msgstr ""
 "Подтвердите установку в системном установщике. Приложение перезапустится на "
 "новой версии."
 
-#: src/ui/window.vala:429
+#: src/ui/window.vala:440
 msgid ""
 "The disk image is open: drag the app into Applications, replacing the old "
 "one, then start it again."
@@ -118,46 +122,55 @@ msgstr ""
 "Образ открыт: перетащите приложение в «Программы», заменив старое, и "
 "запустите снова."
 
-#: src/ui/window.vala:431
+#: src/ui/window.vala:442
 msgid "The installer is starting. The app closes while it runs."
 msgstr "Запускается установщик. На время установки приложение закроется."
 
-#: src/ui/window.vala:433
+#: src/ui/window.vala:444
 msgid "The image is being replaced and the app restarts on the new version."
 msgstr "Образ заменяется, приложение перезапустится на новой версии."
 
-#: src/ui/window.vala:435
+#: src/ui/window.vala:446
 #, c-format
 msgid "The file is at %s."
 msgstr "Файл сохранён: %s"
 
-#: src/ui/window.vala:467 data/ui/window.blp:55
+#: src/ui/window.vala:492 data/ui/window.blp:64 data/ui/home-view.blp:75
+#: data/ui/setup-wizard.blp:316
+msgid "Copy link"
+msgstr "Скопировать ссылку"
+
+#: src/ui/window.vala:494
+msgid ""
+"Another client keeps connecting with an outdated secret. Re-add the proxy "
+"there."
+msgstr ""
+"Другой клиент продолжает подключаться со старым секретом. Добавьте прокси "
+"там заново."
+
+#: src/ui/window.vala:503 data/ui/window.blp:55
 msgid "Details"
 msgstr "Подробнее"
 
-#: src/ui/window.vala:489
+#: src/ui/window.vala:525
 msgid "Error details"
 msgstr "Подробности ошибки"
 
-#: src/ui/window.vala:492
+#: src/ui/window.vala:528
 msgid "Close"
 msgstr "Закрыть"
 
-#: src/ui/window.vala:502
+#: src/ui/window.vala:538
 msgid "An MTProto ↔ WebSocket proxy for Telegram."
 msgstr "Прокси MTProto ↔ WebSocket для Telegram."
 
-#: src/ui/window.vala:506
+#: src/ui/window.vala:542
 msgid "translator-credits"
 msgstr "Ampernic"
 
-#: src/ui/window.vala:508 data/ui/setup-wizard.blp:253
+#: src/ui/window.vala:544 data/ui/setup-wizard.blp:325
 msgid "Support channel"
 msgstr "Канал поддержки"
-
-#: src/ui/home-view.vala:35 src/ui/setup-wizard.vala:126
-msgid "Link copied"
-msgstr "Ссылка скопирована"
 
 #: src/ui/home-view.vala:48
 #, c-format
@@ -197,12 +210,21 @@ msgstr "Настройки сохранены — перезапустите, ч
 msgid "Settings saved"
 msgstr "Настройки сохранены"
 
-#: src/ui/setup-wizard.vala:252
+#: src/ui/setup-wizard.vala:252 data/ui/window.blp:78
+msgid "Settings"
+msgstr "Настройки"
+
+#: src/ui/setup-wizard.vala:252 data/ui/setup-wizard.blp:214
+#: data/ui/setup-wizard.blp:230
+msgid "Allow"
+msgstr "Разрешить"
+
+#: src/ui/setup-wizard.vala:332
 #, c-format
 msgid "Version %s is ready to install."
 msgstr "Версия %s готова к установке."
 
-#: src/ui/setup-wizard.vala:253
+#: src/ui/setup-wizard.vala:333
 #, c-format
 msgid ""
 "Version %s has been released. It installs through the repository this app "
@@ -211,31 +233,31 @@ msgstr ""
 "Вышла версия %s. Она устанавливается через репозиторий, из которого "
 "установлено приложение."
 
-#: src/ui/setup-wizard.vala:394
+#: src/ui/setup-wizard.vala:508
 msgid "Start using"
 msgstr "Начать пользоваться"
 
-#: src/ui/setup-wizard.vala:396 data/ui/window.blp:6
+#: src/ui/setup-wizard.vala:510 data/ui/window.blp:6
 msgid "Quit"
 msgstr "Выход"
 
-#: src/ui/setup-wizard.vala:398
+#: src/ui/setup-wizard.vala:512
 msgid "Update now"
 msgstr "Обновить"
 
-#: src/ui/setup-wizard.vala:400 data/ui/setup-wizard.blp:85
+#: src/ui/setup-wizard.vala:514 data/ui/setup-wizard.blp:107
 msgid "Skip, I know what I'm doing"
 msgstr "Пропустить, я знаю что делаю"
 
-#: src/ui/setup-wizard.vala:404
+#: src/ui/setup-wizard.vala:518
 msgid "Finish"
 msgstr "Завершить"
 
-#: src/ui/setup-wizard.vala:404 data/ui/setup-wizard.blp:313
+#: src/ui/setup-wizard.vala:518 data/ui/setup-wizard.blp:400
 msgid "Next"
 msgstr "Далее"
 
-#: src/ui/setup-wizard.vala:433
+#: src/ui/setup-wizard.vala:547
 #, c-format
 msgid ""
 "The proxy did not report back in time. Another copy may already be holding "
@@ -244,7 +266,7 @@ msgstr ""
 "Прокси не отозвался вовремя. Возможно, порт %d уже занят другой копией — "
 "подробности в журнале."
 
-#: src/ui/setup-wizard.vala:475
+#: src/ui/setup-wizard.vala:598
 #, c-format
 msgid "Failed to open the link: %s"
 msgstr "Не удалось открыть ссылку: %s"
@@ -267,16 +289,16 @@ msgstr ""
 "Порт %d уже занят — прокси, возможно, уже запущен, в том числе в другом "
 "окружении (например, Flatpak)."
 
-#: src/controller/service.vala:57 src/controller/service.vala:74
+#: src/controller/service.vala:58 src/controller/service.vala:81
 #, c-format
 msgid "Failed to start the service: %s"
 msgstr "Не удалось запустить службу: %s"
 
-#: src/controller/service.vala:116
+#: src/controller/service.vala:158 src/controller/service.vala:169
 msgid "The service failed to start."
 msgstr "Не удалось запустить службу."
 
-#: src/controller/service.vala:350
+#: src/controller/service.vala:403
 msgid "Run the proxy in the background at login"
 msgstr "Запускать прокси в фоне при входе в систему"
 
@@ -292,15 +314,11 @@ msgstr "Главное меню"
 msgid "Start"
 msgstr "Запустить"
 
-#: data/ui/window.blp:62
+#: data/ui/window.blp:71
 msgid "Home"
 msgstr "Главная"
 
-#: data/ui/window.blp:69
-msgid "Settings"
-msgstr "Настройки"
-
-#: data/ui/window.blp:76
+#: data/ui/window.blp:85
 msgid "Log"
 msgstr "Журнал"
 
@@ -308,17 +326,13 @@ msgstr "Журнал"
 msgid "Stop"
 msgstr "Остановить"
 
-#: data/ui/home-view.blp:58 data/ui/setup-wizard.blp:228
+#: data/ui/home-view.blp:58 data/ui/setup-wizard.blp:300
 msgid "Connection link"
 msgstr "Ссылка для подключения"
 
-#: data/ui/home-view.blp:67 data/ui/setup-wizard.blp:236
+#: data/ui/home-view.blp:67 data/ui/setup-wizard.blp:308
 msgid "Open in Telegram"
 msgstr "Открыть в Telegram"
-
-#: data/ui/home-view.blp:75 data/ui/setup-wizard.blp:244
-msgid "Copy link"
-msgstr "Скопировать ссылку"
 
 #: data/ui/settings-view.blp:9
 msgid ""
@@ -331,19 +345,19 @@ msgstr ""
 msgid "Proxy"
 msgstr "Прокси"
 
-#: data/ui/settings-view.blp:20 data/ui/setup-wizard.blp:160
+#: data/ui/settings-view.blp:20 data/ui/setup-wizard.blp:182
 msgid "Host"
 msgstr "Хост"
 
-#: data/ui/settings-view.blp:24 data/ui/setup-wizard.blp:134
+#: data/ui/settings-view.blp:24 data/ui/setup-wizard.blp:156
 msgid "Port"
 msgstr "Порт"
 
-#: data/ui/settings-view.blp:33 data/ui/setup-wizard.blp:143
+#: data/ui/settings-view.blp:33 data/ui/setup-wizard.blp:165
 msgid "Secret (32 hex)"
 msgstr "Секрет (32 hex)"
 
-#: data/ui/settings-view.blp:38 data/ui/setup-wizard.blp:148
+#: data/ui/settings-view.blp:38 data/ui/setup-wizard.blp:170
 msgid "Generate"
 msgstr "Сгенерировать"
 
@@ -415,7 +429,7 @@ msgstr "Релиз"
 msgid "Beta"
 msgstr "Бета"
 
-#: data/ui/settings-view.blp:101 data/ui/setup-wizard.blp:157
+#: data/ui/settings-view.blp:101 data/ui/setup-wizard.blp:179
 msgid "Advanced"
 msgstr "Дополнительно"
 
@@ -435,7 +449,7 @@ msgstr ""
 msgid "Run the setup wizard"
 msgstr "Запустить мастер настройки"
 
-#: data/ui/settings-view.blp:115 data/ui/setup-wizard.blp:186
+#: data/ui/settings-view.blp:115 data/ui/setup-wizard.blp:256
 msgid "Status display"
 msgstr "Отображение статуса"
 
@@ -476,39 +490,43 @@ msgstr ""
 msgid "Let's get the proxy ready. It takes a minute."
 msgstr "Подготовим прокси к работе. Это займёт минуту."
 
-#: data/ui/setup-wizard.blp:46
+#: data/ui/setup-wizard.blp:51
 msgid "Checking for updates…"
 msgstr "Проверяем обновления…"
 
-#: data/ui/setup-wizard.blp:58
+#: data/ui/setup-wizard.blp:67
+msgid "Skip the check"
+msgstr "Пропустить проверку"
+
+#: data/ui/setup-wizard.blp:80
 msgid "Up to date"
 msgstr "Обновлений нет"
 
-#: data/ui/setup-wizard.blp:59
+#: data/ui/setup-wizard.blp:81
 msgid "You are running the latest version."
 msgstr "У вас последняя версия."
 
-#: data/ui/setup-wizard.blp:67
+#: data/ui/setup-wizard.blp:89
 msgid "Update available"
 msgstr "Доступно обновление"
 
-#: data/ui/setup-wizard.blp:76
+#: data/ui/setup-wizard.blp:98
 msgid "Release notes"
 msgstr "Что нового"
 
-#: data/ui/setup-wizard.blp:97
+#: data/ui/setup-wizard.blp:119
 msgid "Downloading the update…"
 msgstr "Загрузка обновления…"
 
-#: data/ui/setup-wizard.blp:114
+#: data/ui/setup-wizard.blp:136
 msgid "Installing the update"
 msgstr "Установка обновления"
 
-#: data/ui/setup-wizard.blp:122
+#: data/ui/setup-wizard.blp:144
 msgid "Connection"
 msgstr "Соединение"
 
-#: data/ui/setup-wizard.blp:123
+#: data/ui/setup-wizard.blp:145
 msgid ""
 "Telegram will connect to the proxy at this port. The secret works as its "
 "password."
@@ -516,53 +534,84 @@ msgstr ""
 "Telegram будет подключаться к прокси по этому порту. Секрет работает как "
 "пароль."
 
-#: data/ui/setup-wizard.blp:170
+#: data/ui/setup-wizard.blp:196
+msgid "Permissions"
+msgstr "Разрешения"
+
+#: data/ui/setup-wizard.blp:197
+msgid "Android stops apps in the background unless they hold these."
+msgstr "Без них Android останавливает приложение в фоне."
+
+#: data/ui/setup-wizard.blp:204
+msgid "Notification"
+msgstr "Уведомление"
+
+#: data/ui/setup-wizard.blp:205
+msgid ""
+"Shows that the proxy is running; Android requires it to keep the app alive."
+msgstr ""
+"Показывает, что прокси работает; без него Android не даст приложению жить в "
+"фоне."
+
+#: data/ui/setup-wizard.blp:220
+msgid "Background work"
+msgstr "Работа в фоне"
+
+#: data/ui/setup-wizard.blp:221
+msgid "Without it the system stops the proxy after a while."
+msgstr "Без него система через некоторое время остановит прокси."
+
+#: data/ui/setup-wizard.blp:240
 msgid "Autostart"
 msgstr "Автозапуск"
 
-#: data/ui/setup-wizard.blp:171
+#: data/ui/setup-wizard.blp:241
 msgid "Start the proxy on login so Telegram always finds it up."
 msgstr ""
 "Запускать прокси при входе в систему, чтобы Telegram всегда находил его "
 "включённым."
 
-#: data/ui/setup-wizard.blp:178
+#: data/ui/setup-wizard.blp:248
 msgid "Start on login"
 msgstr "Запускать при входе"
 
-#: data/ui/setup-wizard.blp:187
+#: data/ui/setup-wizard.blp:257
 msgid "Where to show that the proxy is running."
 msgstr "Где показывать, что прокси работает."
 
-#: data/ui/setup-wizard.blp:204
+#: data/ui/setup-wizard.blp:274
 msgid "Starting the proxy…"
 msgstr "Запускаем прокси…"
 
-#: data/ui/setup-wizard.blp:216
+#: data/ui/setup-wizard.blp:288
 msgid "All set"
 msgstr "Всё готово"
 
-#: data/ui/setup-wizard.blp:217
+#: data/ui/setup-wizard.blp:289
 msgid "Add this link in Telegram and the proxy is yours."
 msgstr "Добавьте эту ссылку в Telegram — и прокси ваш."
 
-#: data/ui/setup-wizard.blp:254
+#: data/ui/setup-wizard.blp:326
 msgid "News, help and release notes"
 msgstr "Новости, помощь и описания выпусков"
 
-#: data/ui/setup-wizard.blp:260
+#: data/ui/setup-wizard.blp:332
 msgid "Open the channel"
 msgstr "Открыть канал"
 
-#: data/ui/setup-wizard.blp:276
+#: data/ui/setup-wizard.blp:348
 msgid "Could not start"
 msgstr "Не удалось запустить"
 
-#: data/ui/setup-wizard.blp:280
+#: data/ui/setup-wizard.blp:357
 msgid "Back to settings"
 msgstr "Вернуться к настройкам"
 
-#: data/ui/setup-wizard.blp:304
+#: data/ui/setup-wizard.blp:366
+msgid "Open the log"
+msgstr "Открыть журнал"
+
+#: data/ui/setup-wizard.blp:391
 msgid "Back"
 msgstr "Назад"
 
@@ -582,6 +631,10 @@ msgid ""
 "Cloudflare-proxy and fake-TLS fallbacks. Runs as a background daemon "
 "controlled by a GTK4/libadwaita front-end."
 msgstr ""
+"Нативный MTProto-прокси для Telegram: переводит обфусцированный транспорт "
+"MTProto в WebSocket-соединение (WSS) с дата-центрами Telegram, с запасными "
+"путями через Cloudflare-прокси и fake-TLS. Работает фоновой службой, которой "
+"управляет интерфейс на GTK4/libadwaita."
 
 #: data/space.ampernic.AnotherTGProxy.metainfo.xml.in.in:17
 msgid "Ampernic"
@@ -593,7 +646,7 @@ msgstr ""
 
 #: data/space.ampernic.AnotherTGProxy.metainfo.xml.in.in:25
 msgid "proxy"
-msgstr ""
+msgstr "прокси"
 
 #: data/space.ampernic.AnotherTGProxy.metainfo.xml.in.in:26
 msgid "MTProto"
@@ -617,9 +670,6 @@ msgstr ""
 
 #~ msgid "Background"
 #~ msgstr "Фон"
-
-#~ msgid "Notification"
-#~ msgstr "Уведомление"
 
 #~ msgid "Quick Settings"
 #~ msgstr "Быстрые настройки"
