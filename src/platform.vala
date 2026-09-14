@@ -181,6 +181,17 @@ namespace TgWsProxy {
             return update_kind () != UpdateKind.NONE;
         }
 
+        // The version to compare releases against. A distribution appends its own
+        // release to ours (2.2.0-alt1), and a release suffix is not a prerelease
+        // marker: the updater would read that build as something before 2.2.0 and
+        // offer 2.2.0 forever, and rank it below every -beta of the same version.
+        // It is 2.2.0, so that is what the check is told.
+        public static string upstream_version () {
+            if (Build.IS_PRERELEASE) return Build.VERSION;
+            int dash = Build.VERSION.index_of_char ('-');
+            return (dash > 0) ? Build.VERSION[0:dash] : Build.VERSION;
+        }
+
         public StatusMode[] available_modes () {
             StatusMode[] m = { StatusMode.WINDOW };
             if (tray_available ()) m += StatusMode.TRAY;

@@ -53,7 +53,7 @@ namespace TgWsProxy {
             autostart_row.active = service.is_autostart ();
             updates_row.active = cfg.check_updates;
             var ch = cfg.update_channel;
-            if (ch == "") ch = Build.VERSION.contains ("-") ? "beta" : "stable";
+            if (ch == "") ch = Build.IS_PRERELEASE ? "beta" : "stable";
             channel_row.selected = (ch == "beta") ? 1 : 0;
             status_row.text = cfg.status_template;
             vulkan_row.active = cfg.vulkan_renderer;

@@ -113,13 +113,13 @@ namespace TgWsProxy {
                         "RWRPM5OxKHSDb1FxBh6td77H5v3omk9CQZpdvGhMF/OwbIfJkf3rh/02");
                 }
                 updater = new Station.Updates.with_schema (schema,
-                    "Another-TGProxy/another-tgproxy", Build.VERSION);
+                    "Another-TGProxy/another-tgproxy", Platform.upstream_version ());
                 // Channels this build offers; the prerelease keywords each accepts.
                 updater.add_channel ("stable", null);
                 updater.add_channel ("beta", { "beta", "rc", "alpha" });
                 // Empty config = track beta on a prerelease build, stable otherwise.
                 var ch = cfg.update_channel;
-                if (ch == "") ch = Build.VERSION.contains ("-") ? "beta" : "stable";
+                if (ch == "") ch = Build.IS_PRERELEASE ? "beta" : "stable";
                 updater.set_channel (ch);
                 // Show only the "What's new" block of the release notes, in the
                 // running language: the heading is gettext-translated, so a RU build
