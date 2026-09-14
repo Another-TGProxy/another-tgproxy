@@ -8,7 +8,7 @@
 # core on every platform. Bump it deliberately via tools/pin-deps.sh.
 [wrap-git]
 url = https://github.com/Another-TGProxy/mtproxy-ws.git
-revision = 45928ec7b1f1f75232588eae326315af6ccafba3
+revision = be1fac278ce7909bf400c273512de77b67f94354
 
 [provide]
 mtproxy-ws = mtproxyws_dep

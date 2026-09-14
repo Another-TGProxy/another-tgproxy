@@ -14,11 +14,37 @@ po/*.pot
 *~
 .vscode/settings.json
 
-# Wrap-fetched subprojects (proxy-libintl is vendored and tracked)
-/subprojects/mtproxy-ws/
-/subprojects/libstation/
-/subprojects/quick-settings-hub/
-/subprojects/json-glib/
-/subprojects/json-glib-*/
+# Wrap-fetched subprojects: everything under subprojects/ is fetched or dropped
+# there by meson and by Pixiewood (which adds a wrap per GTK dependency during a
+# local Android build). Only our own wraps and the vendored proxy-libintl belong
+# to the repo.
+/subprojects/*
+!/subprojects/*.wrap
 /subprojects/*.wraplock
-/subprojects/packagecache/
+!/subprojects/proxy-libintl/
+/subprojects/cairo.wrap
+/subprojects/fontconfig.wrap
+/subprojects/freetype2.wrap
+/subprojects/fribidi.wrap
+/subprojects/gdk-pixbuf.wrap
+/subprojects/glib.wrap
+/subprojects/graphene.wrap
+/subprojects/gtk.wrap
+/subprojects/gvdb.wrap
+/subprojects/harfbuzz.wrap
+/subprojects/iconv.wrap
+/subprojects/libadwaita.wrap
+/subprojects/libepoxy.wrap
+/subprojects/libffi.wrap
+/subprojects/libjpeg-turbo.wrap
+/subprojects/libpng.wrap
+/subprojects/libtiff.wrap
+/subprojects/libxml2.wrap
+/subprojects/ministream.wrap
+/subprojects/pango.wrap
+/subprojects/pcre2.wrap
+/subprojects/pixman.wrap
+
+# Local Android build (Pixiewood) leftovers
+/.pixiewood/
+/.buildconfig
